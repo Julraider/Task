@@ -24,10 +24,27 @@ const api = {
 
   addItem: (text, day, notes) => ipcRenderer.invoke('items:add', { text, day, notes }),
   updateItem: (id, patch) => ipcRenderer.invoke('items:update', { id, patch }),
+  updateItems: (ids, patch) => ipcRenderer.invoke('items:updateMany', { ids, patch }),
   removeItem: (id) => ipcRenderer.invoke('items:remove', { id }),
+  removeItems: (ids) => ipcRenderer.invoke('items:removeMany', { ids }),
   restoreItems: (items) => ipcRenderer.invoke('items:restore', { items }),
   moveItems: (ids, day) => ipcRenderer.invoke('items:move', { ids, day }),
   clearDone: (day) => ipcRenderer.invoke('items:clearDone', { day }),
+  /** Erledigtes vor `before` (Tagesschluessel) endgueltig entfernen - nur auf Nutzerwunsch. */
+  purgeDone: (before) => ipcRenderer.invoke('items:purgeDone', { before }),
+  getStats: (today) => ipcRenderer.invoke('stats:get', { today }),
+
+  // --- Zustand der Ablage --------------------------------------------------
+  // Meldet defekte Dateien, fehlende Schreibrechte, Notablagen. Der Renderer
+  // kann das anzeigen; passiert nichts, meldet sich der Main-Prozess selbst.
+  getStatus: () => ipcRenderer.invoke('status:get'),
+  onStatusChanged: (cb) => on('status:changed', cb),
+  dismissProblem: (code) => ipcRenderer.invoke('status:dismiss', { code }),
+
+  // --- Sicherungen ---------------------------------------------------------
+  listBackups: () => ipcRenderer.invoke('backup:list'),
+  createBackup: (reason) => ipcRenderer.invoke('backup:create', { reason }),
+  restoreBackup: (name) => ipcRenderer.invoke('backup:restore', { name }),
 
   // --- Einstellungen -------------------------------------------------------
   getSettings: () => ipcRenderer.invoke('settings:get'),

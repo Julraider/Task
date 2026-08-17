@@ -357,8 +357,10 @@ class Store {
       this._lastWrite = this._statOf(this.filePath);
       this._state.lastSaveAt = nowIso();
       if (this._state.lastError) {
+        // Es klappt wieder - die alte Fehlermeldung darf weg
         this._state.lastError = null;
         this._problems.delete('schreibfehler');
+        this._problems.delete('notablage');
         this._emitStatus();
       }
       return true;
@@ -963,11 +965,9 @@ function migrate(data) {
 module.exports = {
   Store,
   CURRENT_VERSION,
-  SAVE_DEBOUNCE_MS,
   newId,
   normalize,
-  migrate,
-  // von settings.js mitbenutzt - beide schreiben nach demselben Muster
+  // von settings.js und ipc.js mitbenutzt - alle schreiben nach demselben Muster
   describeFsError,
   writeDurable,
   fsyncDir,

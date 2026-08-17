@@ -61,15 +61,25 @@ window.ItemCard = (function () {
     }, status.icon);
   }
 
+  /**
+   * Karte zum Ziehen freigeben.
+   * Gehoert die Karte zu einer Mehrfachauswahl, wandert die ganze Auswahl mit.
+   */
   function makeDraggable(node, item) {
     node.draggable = true;
     node.addEventListener('dragstart', (ev) => {
-      ev.dataTransfer.setData(DRAG_TYPE, item.id);
-      ev.dataTransfer.setData('text/plain', item.title);
+      const ids = State.selectionOr(item.id);
+      ev.dataTransfer.setData(DRAG_TYPE, ids.join(' '));
+      ev.dataTransfer.setData('text/plain', ids.length > 1 ? `${ids.length} Aufgaben` : item.title);
       ev.dataTransfer.effectAllowed = 'move';
       node.classList.add('is-dragging');
+      // Merker fuer die Ansicht: solange gezogen wird, zeigt sie Ablagezonen
+      document.body.classList.add('is-draggingItem');
     });
-    node.addEventListener('dragend', () => node.classList.remove('is-dragging'));
+    node.addEventListener('dragend', () => {
+      node.classList.remove('is-dragging');
+      document.body.classList.remove('is-draggingItem');
+    });
   }
 
   // ------------------------------------------------------------- Ausfuehrlich
@@ -78,15 +88,42 @@ window.ItemCard = (function () {
     const state = State.get();
     const expanded = state.expanded.has(item.id);
     const editing = state.editingId === item.id;
+    const selected = state.selected.has(item.id);
+    const focused = state.focusId === item.id;
+    const isOverdue = item.status !== 'erledigt' && item.day < Dates.todayKey();
 
     const card = h('article', {
-      class: 'item' + (expanded ? ' is-expanded' : '') + (editing ? ' is-editing' : ''),
-      dataset: { id: item.id, status: item.status, prio: String(item.priority || 0) },
+      class:
+        'item' +
+        (expanded ? ' is-expanded' : '') +
+        (editing ? ' is-editing' : '') +
+        (selected ? ' is-selected' : '') +
+        (focused ? ' is-focused' : '') +
+        (isOverdue ? ' is-overdue' : ''),
+      dataset: { id: item.id, status: item.status, prio: String(item.priority || 0), fkey: 'item:' + item.id },
+      // Tastaturnavigation: nur die aktuelle Karte liegt im Tab-Lauf,
+      // zwischen den Karten geht es mit den Pfeiltasten weiter.
+      tabindex: focused ? '0' : '-1',
+      'aria-selected': selected ? 'true' : 'false',
     });
 
     const head = h('div', {
       class: 'item__head',
-      onclick: () => State.toggleExpanded(item.id),
+      // Umschalt-Klick wuerde sonst Text markieren
+      onmousedown: (ev) => {
+        if (ev.shiftKey) ev.preventDefault();
+      },
+      onclick: (ev) => {
+        if (ev.ctrlKey || ev.metaKey) {
+          State.toggleSelect(item.id);
+          return;
+        }
+        if (ev.shiftKey) {
+          State.selectRange(item.id);
+          return;
+        }
+        State.toggleExpanded(item.id);
+      },
       ondblclick: () => {
         State.get().expanded.add(item.id);
         State.set({ editingId: item.id });
@@ -103,12 +140,15 @@ window.ItemCard = (function () {
       h('div', { class: 'item__actions' },
         h('button', {
           class: 'iconbtn',
-          title: 'Auf morgen schieben',
+          // Was schon in der Vergangenheit liegt, gehoert nach vorn geholt -
+          // "einen Tag weiter" waere dort immer noch Vergangenheit.
+          title: isOverdue ? 'Auf heute holen' : 'Auf morgen schieben',
           onclick: (ev) => {
             ev.stopPropagation();
-            State.move(item.id, Dates.addDays(item.day, 1));
+            const target = isOverdue ? Dates.todayKey() : Dates.addDays(item.day, 1);
+            State.move(State.selectionOr(item.id), target);
           },
-        }, '→'),
+        }, isOverdue ? '⇥' : '→'),
         h('button', {
           class: 'iconbtn',
           title: 'Bearbeiten',
@@ -155,6 +195,22 @@ window.ItemCard = (function () {
   // ------------------------------------------------------------------ Editor
 
   function editor(item) {
+    // Der getippte Zwischenstand liegt im State, nicht im DOM: baut ein
+    // Ereignis aus einem anderen Fenster die Liste neu auf, ist er noch da.
+    const running = State.draftFor(item.id);
+    const values =
+      running ||
+      State.startDraft(item.id, {
+        title: item.title,
+        notes: item.notes || '',
+        source: item.source,
+        status: item.status,
+        priority: String(item.priority || 0),
+        day: item.day,
+        ref: item.ref || '',
+        tags: (item.tags || []).join(', '),
+      });
+
     const form = h('form', {
       class: 'editor',
       onsubmit: (ev) => {
@@ -163,27 +219,60 @@ window.ItemCard = (function () {
       },
     });
 
-    const titleInput = h('input', { class: 'editor__title', type: 'text', value: item.title, required: 'required' });
-    const notesInput = h('textarea', { class: 'editor__notes', rows: '3', placeholder: 'Notizen, Links, Ansprechpartner …' });
-    notesInput.value = item.notes || '';
+    /** Feld an den Zwischenstand haengen und mit einem Fokus-Schluessel versehen. */
+    function bind(node, key) {
+      node.dataset.fkey = `editor:${item.id}:${key}`;
+      node.addEventListener('input', () => {
+        values[key] = node.value;
+      });
+      node.addEventListener('change', () => {
+        values[key] = node.value;
+      });
+      return node;
+    }
 
-    const sourceSelect = h('select', { class: 'editor__field' },
-      ...Model.SOURCES.map((s) => h('option', { value: s.id, selected: s.id === item.source }, `${s.icon} ${s.label}`))
+    const titleInput = bind(
+      h('input', { class: 'editor__title', type: 'text', value: values.title, required: 'required' }),
+      'title'
     );
-    const statusSelect = h('select', { class: 'editor__field' },
-      ...Model.STATUSES.map((s) => h('option', { value: s.id, selected: s.id === item.status }, s.label))
+    const notesInput = bind(
+      h('textarea', { class: 'editor__notes', rows: '3', placeholder: 'Notizen, Links, Ansprechpartner …' }),
+      'notes'
     );
-    const prioSelect = h('select', { class: 'editor__field' },
-      ...Model.PRIORITIES.map((p) => h('option', { value: String(p.id), selected: p.id === (item.priority || 0) }, p.label))
+    notesInput.value = values.notes;
+
+    const sourceSelect = bind(
+      h('select', { class: 'editor__field' },
+        ...Model.SOURCES.map((s) => h('option', { value: s.id, selected: s.id === values.source }, `${s.icon} ${s.label}`))
+      ),
+      'source'
     );
-    const dayInput = h('input', { class: 'editor__field', type: 'date', value: item.day });
-    const refInput = h('input', { class: 'editor__field', type: 'text', value: item.ref || '', placeholder: 'INC0012345' });
-    const tagsInput = h('input', {
-      class: 'editor__field',
-      type: 'text',
-      value: (item.tags || []).join(', '),
-      placeholder: 'netzwerk, hardware',
-    });
+    const statusSelect = bind(
+      h('select', { class: 'editor__field' },
+        ...Model.STATUSES.map((s) => h('option', { value: s.id, selected: s.id === values.status }, s.label))
+      ),
+      'status'
+    );
+    const prioSelect = bind(
+      h('select', { class: 'editor__field' },
+        ...Model.PRIORITIES.map((p) => h('option', { value: String(p.id), selected: String(p.id) === values.priority }, p.label))
+      ),
+      'priority'
+    );
+    const dayInput = bind(h('input', { class: 'editor__field', type: 'date', value: values.day }), 'day');
+    const refInput = bind(
+      h('input', { class: 'editor__field', type: 'text', value: values.ref, placeholder: 'INC0012345' }),
+      'ref'
+    );
+    const tagsInput = bind(
+      h('input', {
+        class: 'editor__field',
+        type: 'text',
+        value: values.tags,
+        placeholder: 'netzwerk, hardware',
+      }),
+      'tags'
+    );
 
     function save() {
       const title = titleInput.value.trim();
@@ -250,11 +339,14 @@ window.ItemCard = (function () {
       )
     );
 
-    // Fokus ans Ende des Titels
-    setTimeout(() => {
-      titleInput.focus();
-      titleInput.setSelectionRange(titleInput.value.length, titleInput.value.length);
-    }, 0);
+    // Fokus ans Ende des Titels - aber nur beim Oeffnen. Bei einem
+    // Neuaufbau mittendrin bleibt der Fokus, wo der Nutzer gerade tippt.
+    if (!running) {
+      setTimeout(() => {
+        titleInput.focus();
+        titleInput.setSelectionRange(titleInput.value.length, titleInput.value.length);
+      }, 0);
+    }
 
     return form;
   }
@@ -264,11 +356,17 @@ window.ItemCard = (function () {
   function renderCompact(item) {
     const source = Model.sourceById(item.source);
     const status = Model.statusById(item.status);
+    const state = State.get();
+    const focused = state.focusId === item.id;
+    const isOverdue = item.status !== 'erledigt' && item.day < Dates.todayKey();
 
     const card = h('article', {
-      class: 'mini',
-      dataset: { id: item.id, status: item.status, prio: String(item.priority || 0) },
-      title: `${item.title}\n${source.label} · ${status.label}`,
+      class: 'mini' + (focused ? ' is-focused' : '') + (isOverdue ? ' is-overdue' : ''),
+      dataset: { id: item.id, status: item.status, prio: String(item.priority || 0), fkey: 'item:' + item.id },
+      tabindex: focused ? '0' : '-1',
+      title:
+        `${item.title}\n${source.label} · ${status.label}` +
+        (isOverdue ? '\n⚠ überfällig' : ''),
     },
       h('button', {
         class: 'mini__status',
@@ -290,21 +388,36 @@ window.ItemCard = (function () {
     return card;
   }
 
-  /** Macht ein Element zum Ablageziel fuer einen Tag. */
+  /**
+   * Macht ein Element zum Ablageziel fuer einen Tag.
+   *
+   * `dragleave` feuert auch beim Wechsel auf ein Kindelement. Ohne den Blick
+   * auf `relatedTarget` flackert die Hervorhebung deshalb, sobald man ueber
+   * eine Karte innerhalb der Liste zieht.
+   */
   function makeDropTarget(node, dayKey) {
+    node.addEventListener('dragenter', (ev) => {
+      if (!ev.dataTransfer.types.includes(DRAG_TYPE)) return;
+      ev.preventDefault();
+      node.classList.add('is-dropTarget');
+    });
     node.addEventListener('dragover', (ev) => {
       if (!ev.dataTransfer.types.includes(DRAG_TYPE)) return;
       ev.preventDefault();
       ev.dataTransfer.dropEffect = 'move';
       node.classList.add('is-dropTarget');
     });
-    node.addEventListener('dragleave', () => node.classList.remove('is-dropTarget'));
+    node.addEventListener('dragleave', (ev) => {
+      if (ev.relatedTarget && node.contains(ev.relatedTarget)) return; // nur zu einem Kind gewechselt
+      node.classList.remove('is-dropTarget');
+    });
     node.addEventListener('drop', (ev) => {
       node.classList.remove('is-dropTarget');
-      const id = ev.dataTransfer.getData(DRAG_TYPE);
-      if (!id) return;
+      const ids = String(ev.dataTransfer.getData(DRAG_TYPE) || '').split(' ').filter(Boolean);
+      if (!ids.length) return;
       ev.preventDefault();
-      State.move(id, dayKey);
+      State.move(ids, dayKey);
+      if (ids.length > 1) State.clearSelection();
     });
     return node;
   }

@@ -12,68 +12,90 @@
   <body>
     <div class="app">
       <header class="topbar">
-        <div class="brand">
-          <span class="brand__mark">✓</span>
-          <span class="brand__name">Tagwerk</span>
+        <div class="row topbar__group topbar__group--start">
+          <div class="brand">
+            <span class="brand__mark" aria-hidden="true">✓</span>
+            <span class="brand__name">Tagwerk</span>
+          </div>
+
+          <nav class="tabs" id="viewTabs" aria-label="Ansicht">
+            <button class="tab" data-view="tag" type="button" title="Tagesansicht (Strg + 1)" aria-pressed="false">Tag</button>
+            <button class="tab" data-view="woche" type="button" title="Wochenansicht (Strg + 2)" aria-pressed="false">Woche</button>
+          </nav>
         </div>
 
-        <nav class="tabs" id="viewTabs" aria-label="Ansicht">
-          <button class="tab" data-view="tag" type="button">Tag</button>
-          <button class="tab" data-view="woche" type="button">Woche</button>
-        </nav>
-
-        <div class="datenav">
-          <button class="iconbtn" id="btnPrev" type="button" title="Zurück (Alt + ←)">‹</button>
+        <div class="datenav" role="group" aria-label="Zeitraum wechseln">
+          <button class="iconbtn" id="btnPrev" type="button" title="Zurück (Alt + ←)" aria-label="Zurück">‹</button>
           <button class="btn btn--ghost" id="btnToday" type="button" title="Zu heute springen (Alt + ↓)">Heute</button>
-          <button class="iconbtn" id="btnNext" type="button" title="Vor (Alt + →)">›</button>
+          <button class="iconbtn" id="btnNext" type="button" title="Vor (Alt + →)" aria-label="Vor">›</button>
           <span class="datenav__label" id="dateLabel"></span>
         </div>
 
         <div class="topbar__spacer"></div>
 
-        <div class="search">
-          <span class="search__icon" aria-hidden="true">⌕</span>
-          <input
-            id="searchInput"
-            type="search"
-            placeholder="Suchen (Strg + F)"
-            autocomplete="off"
-            spellcheck="false"
-          />
-        </div>
+        <div class="row topbar__group topbar__group--end">
+          <div class="search">
+            <span class="search__icon" aria-hidden="true">⌕</span>
+            <input
+              id="searchInput"
+              type="search"
+              placeholder="Suchen (Strg + F)"
+              aria-label="Aufgaben durchsuchen"
+              autocomplete="off"
+              spellcheck="false"
+            />
+          </div>
 
-        <button class="iconbtn" id="btnExport" type="button" title="Exportieren (Strg + E)">⇪</button>
-        <button class="iconbtn" id="btnHelp" type="button" title="Kurzanleitung">?</button>
-        <button class="iconbtn" id="btnSettings" type="button" title="Einstellungen">⚙</button>
+          <div class="row topbar__actions" role="group" aria-label="Werkzeuge">
+            <button class="iconbtn" id="btnQuickTop" type="button" title="Schnellerfassung öffnen" aria-label="Schnellerfassung öffnen">⚡</button>
+            <button class="iconbtn" id="btnExport" type="button" title="Exportieren (Strg + E)" aria-label="Exportieren">⇪</button>
+            <button class="iconbtn" id="btnHelp" type="button" title="Kurzanleitung (F1)" aria-label="Kurzanleitung">?</button>
+            <button class="iconbtn" id="btnSettings" type="button" title="Einstellungen (Strg + ,)" aria-label="Einstellungen">⚙</button>
+          </div>
+        </div>
       </header>
 
-      <section class="capture">
+      <section class="capture" aria-label="Aufgabe erfassen">
         <form class="capture__form" id="captureForm" autocomplete="off">
           <input
             class="capture__input"
             id="captureInput"
             type="text"
             placeholder="Was ist reingekommen?  z. B.  Switch tauschen @muendlich #netzwerk ! >morgen"
+            aria-label="Neue Aufgabe"
+            aria-describedby="captureHelp"
             spellcheck="false"
           />
           <button class="btn btn--primary" id="captureSubmit" type="submit">Erfassen</button>
         </form>
         <div class="capture__preview" id="capturePreview"></div>
+        <p class="visually-hidden" id="captureHelp">
+          Quelle mit @, Schlagwort mit Raute, Priorität mit Ausrufezeichen, Zieltag mit größer-als.
+          Bei @ und Raute vervollständigt die Tabulatortaste.
+        </p>
       </section>
 
-      <section class="filters">
+      <section class="filters" aria-label="Filter">
         <div class="segmented" id="statusFilter" role="group" aria-label="Status-Filter">
-          <button type="button" data-status="alle">Alle</button>
-          <button type="button" data-status="offen">Offen</button>
-          <button type="button" data-status="erledigt">Erledigt</button>
+          <button type="button" data-status="alle" aria-pressed="false">Alle</button>
+          <button type="button" data-status="offen" aria-pressed="false">Offen</button>
+          <button type="button" data-status="erledigt" aria-pressed="false">Erledigt</button>
         </div>
 
         <label class="filters__label">
           <span class="visually-hidden">Quelle</span>
-          <select id="sourceFilter" class="field field--slim"></select>
+          <select id="sourceFilter" class="field field--slim" aria-label="Quelle"></select>
         </label>
 
-        <div class="filters__active" id="activeFilters"></div>
+        <label class="filters__label">
+          <span class="visually-hidden">Schlagwort</span>
+          <select id="tagFilter" class="field field--slim" aria-label="Schlagwort"></select>
+        </label>
+
+        <div class="filters__active" id="activeFilters" aria-live="polite"></div>
+
+        <button class="linkbtn filters__reset" id="btnResetFilters" type="button" hidden
+          title="Alle Filter zurücksetzen (Strg + Umschalt + F)">Filter zurücksetzen</button>
 
         <div class="filters__spacer"></div>
 

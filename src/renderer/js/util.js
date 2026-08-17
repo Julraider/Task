@@ -82,6 +82,77 @@ window.Util = (function () {
     return close;
   }
 
+  /** Liegt der Fokus in einem Feld, in das gerade getippt wird? */
+  function isTextInput(node) {
+    if (!node || !node.tagName) return false;
+    const tag = node.tagName.toUpperCase();
+    return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || node.isContentEditable === true;
+  }
+
+  // ------------------------------------------------------------ Fokus retten
+  //
+  // Die Ansicht wird bei jeder Aenderung komplett neu aufgebaut - auch dann,
+  // wenn die Aenderung aus einem anderen Fenster kommt. Wer gerade tippt, darf
+  // dabei weder Fokus noch Cursorposition verlieren. Deshalb merken wir uns das
+  // zuletzt fokussierte Element; nach dem Neuaufbau wird anhand von
+  // `data-fkey` das Gegenstueck gesucht und der Fokus dorthin zurueckgelegt.
+
+  let lastFocused = null;
+  document.addEventListener(
+    'focusin',
+    (ev) => {
+      if (ev.target && ev.target !== document.body) lastFocused = ev.target;
+    },
+    true
+  );
+
+  function escapeSelector(value) {
+    if (window.CSS && typeof CSS.escape === 'function') return CSS.escape(value);
+    return String(value).replace(/["\\]/g, '\\$&');
+  }
+
+  /**
+   * Fokus nach einem Neuaufbau wiederherstellen.
+   * Greift nur, wenn der Fokus tatsaechlich verloren ging (das alte Element
+   * haengt nicht mehr im Dokument und niemand sonst hat den Fokus uebernommen).
+   * `fallbackKey` springt ein, wenn das Original verschwunden ist - etwa nach
+   * dem Loeschen, wenn der Nachbar den Fokus bekommen soll.
+   */
+  function restoreFocus(root, fallbackKey) {
+    if (!root) return false;
+    const active = document.activeElement;
+    if (active && active !== document.body && active !== document.documentElement) return false;
+
+    const previous = lastFocused;
+    const keys = [];
+    if (previous && !previous.isConnected && previous.dataset && previous.dataset.fkey) {
+      keys.push(previous.dataset.fkey);
+    }
+    if (fallbackKey) keys.push(fallbackKey);
+
+    for (const key of keys) {
+      const next = root.querySelector(`[data-fkey="${escapeSelector(key)}"]`);
+      if (!next) continue;
+      next.focus();
+      // Cursorposition uebernehmen - abgehaengte Felder behalten ihren Stand
+      if (
+        previous &&
+        previous.dataset.fkey === key &&
+        typeof previous.selectionStart === 'number' &&
+        typeof next.selectionStart === 'number'
+      ) {
+        try {
+          next.setSelectionRange(previous.selectionStart, previous.selectionEnd);
+        } catch (err) {
+          /* Feldtypen ohne Auswahlbereich (z. B. type=date) ignorieren das */
+        }
+      }
+      lastFocused = next;
+      return true;
+    }
+    return false;
+  }
+
   /** Text fuer die Suche normalisieren (Umlaute, Gross/Klein). */
   function normalize(text) {
     return String(text || '')
@@ -97,5 +168,5 @@ window.Util = (function () {
     return `${count} ${count === 1 ? one : many}`;
   }
 
-  return { h, el, els, clear, debounce, toast, normalize, plural };
+  return { h, el, els, clear, debounce, toast, normalize, plural, isTextInput, restoreFocus };
 })();

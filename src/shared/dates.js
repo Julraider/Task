@@ -37,8 +37,14 @@
     return new Date(y, m - 1, d, 12, 0, 0, 0);
   }
 
+  /**
+   * Gueltiger Tagesschluessel? Die Rueckprobe ueber keyOf faengt auch
+   * '2026-02-31' oder '2026-13-01' ab - Date rechnet so etwas sonst still um.
+   */
   function isValidKey(key) {
-    return typeof key === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(key) && !Number.isNaN(parseKey(key).getTime());
+    if (typeof key !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(key)) return false;
+    const d = parseKey(key);
+    return !Number.isNaN(d.getTime()) && keyOf(d) === key;
   }
 
   function addDays(key, n) {
@@ -156,9 +162,13 @@
     return parseKey(key).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
   }
 
-  /** '17.08.2026' */
+  /** '17.08.2026' - fest zweistellig, damit Berichte und Dateinamen buendig sind. */
   function formatNumeric(key) {
-    return parseKey(key).toLocaleDateString('de-DE');
+    return parseKey(key).toLocaleDateString('de-DE', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
   }
 
   /** 'August 2026' */

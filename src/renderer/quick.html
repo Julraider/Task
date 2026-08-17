@@ -12,18 +12,18 @@
   <body class="quickbody">
     <div class="quick" id="quickCard">
       <form class="quick__form" id="quickForm" autocomplete="off">
-        <span class="quick__mark" aria-hidden="true">✓</span>
+        <span class="quick__mark" id="quickMark" aria-hidden="true">✓</span>
         <input
           class="quick__input"
           id="quickInput"
           type="text"
           placeholder="Was ist reingekommen?"
+          aria-label="Aufgabe erfassen"
+          aria-describedby="quickHint"
           spellcheck="false"
         />
       </form>
-      <div class="quick__hint" id="quickHint">
-        <span class="quick__keys"><kbd>Enter</kbd> speichern · <kbd>Esc</kbd> schließen</span>
-      </div>
+      <div class="quick__hint" id="quickHint" aria-live="polite"></div>
     </div>
 
     <script src="../shared/dates.js"></script>

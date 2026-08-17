@@ -12,7 +12,7 @@
  */
 
 const path = require('path');
-const { app, BrowserWindow, Tray, Menu, globalShortcut, nativeImage, screen, nativeTheme, shell } = require('electron');
+const { app, BrowserWindow, Tray, Menu, globalShortcut, nativeImage, screen, nativeTheme, shell, dialog } = require('electron');
 
 const { Store } = require('./store');
 const { Settings } = require('./settings');
@@ -25,38 +25,72 @@ const ASSETS = path.join(__dirname, '..', '..', 'assets');
 const PRELOAD = path.join(__dirname, '..', 'preload', 'preload.js');
 const RENDERER = path.join(__dirname, '..', 'renderer');
 
+const QUICK_WIDTH = 680;
+const QUICK_HEIGHT = 108; // genau so hoch wie die Karte - der Rest waere unsichtbar klickbar
+
 let mainWindow = null;
 let quickWindow = null;
+let quickReady = null;
 let tray = null;
 let store = null;
 let settings = null;
 let quitting = false;
 
+/** Meldungen aus dem Main-Prozess selbst (Kuerzel belegt, Autostart nicht moeglich, ...). */
+const notices = new Map();
+/** Welche Probleme dem Nutzer schon als Dialog gezeigt wurden - nur einmal pro Sitzung. */
+const shown = new Set();
+
 // Nur eine Instanz: ein zweiter Start holt das vorhandene Fenster nach vorne.
+// Wichtig auch fuer die Daten - zwei Instanzen auf derselben Datei wuerden sich
+// gegenseitig ueberschreiben.
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  app.on('second-instance', () => showMainWindow());
+  app.on('second-instance', (_event, argv) => {
+    if (Array.isArray(argv) && argv.includes('--quick')) showQuickWindow();
+    else showMainWindow();
+  });
   app.whenReady().then(bootstrap);
 }
 
 function bootstrap() {
   const userData = app.getPath('userData');
   settings = new Settings(path.join(userData, 'settings.json')).load();
-  store = new Store(path.join(userData, 'tagwerk-data.json')).load();
+  store = new Store(path.join(userData, 'tagwerk-data.json'), {
+    keepDaily: settings.get('backupKeepDays'),
+  }).load();
 
   applyTheme(settings.get('theme'));
+  hardenWebContents();
 
   registerIpc({ store, settings, api: publicApi() });
 
   // Jede Datenaenderung sofort an alle offenen Fenster melden
-  store.onChange(() => broadcast('data:changed', store.snapshot()));
+  store.onChange(() => {
+    broadcast('data:changed', store.snapshot());
+    refreshTrayLater();
+  });
+  store.onStatus(() => {
+    broadcast('status:changed', appStatus());
+    reportProblems();
+  });
   nativeTheme.on('updated', () => broadcast('theme:changed', currentTheme()));
 
   createMainWindow();
   createTray();
-  registerGlobalShortcut();
+  const shortcut = registerGlobalShortcut();
+  if (!shortcut.ok) {
+    notice(
+      'kuerzel',
+      'warn',
+      `Das globale Tastenkürzel „${settings.get('globalShortcut')}" ließ sich nicht belegen (${shortcut.reason}). ` +
+        'In den Einstellungen lässt sich ein anderes wählen.'
+    );
+  }
   buildAppMenu();
+  syncLaunchAtLogin();
+  reportProblems();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
@@ -98,6 +132,13 @@ function createMainWindow() {
     if (isDev && process.argv.includes('--devtools')) mainWindow.webContents.openDevTools({ mode: 'detach' });
   });
 
+  // Der Renderer meldet sich frueh - offene Probleme sollen ihn erreichen,
+  // auch wenn sie schon beim Laden der Datei entstanden sind.
+  mainWindow.webContents.on('did-finish-load', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    mainWindow.webContents.send('status:changed', appStatus());
+  });
+
   const persistBounds = debounce(() => {
     if (!mainWindow || mainWindow.isDestroyed() || mainWindow.isMinimized()) return;
     const isMax = mainWindow.isMaximized();
@@ -129,25 +170,50 @@ function createMainWindow() {
   });
 }
 
-/** Fenster darf nicht ausserhalb aller Bildschirme liegen (Monitor abgesteckt?). */
+/**
+ * Fenster darf nicht ausserhalb aller Bildschirme liegen (Monitor abgesteckt?)
+ * und nicht groesser sein als der Bildschirm, auf dem es landet - sonst haengt
+ * die Titelleiste nach einem Wechsel vom Docking-Monitor zum Notebook oben raus.
+ */
 function sanitizeBounds(win) {
-  const out = { width: win.width || 1080, height: win.height || 760, x: win.x, y: win.y, maximized: !!win.maximized };
-  if (out.x == null || out.y == null) return out;
+  const src = win && typeof win === 'object' ? win : {};
+  const out = {
+    width: Number(src.width) > 0 ? Math.round(src.width) : 1080,
+    height: Number(src.height) > 0 ? Math.round(src.height) : 760,
+    x: Number.isFinite(src.x) ? Math.round(src.x) : null,
+    y: Number.isFinite(src.y) ? Math.round(src.y) : null,
+    maximized: !!src.maximized,
+  };
 
-  const visible = screen.getAllDisplays().some((d) => {
+  const displays = screen.getAllDisplays();
+  const overlap = (d) => {
     const a = d.workArea;
-    return out.x < a.x + a.width && out.x + out.width > a.x && out.y < a.y + a.height && out.y + out.height > a.y;
-  });
-  if (!visible) {
+    if (out.x == null || out.y == null) return 0;
+    const w = Math.min(out.x + out.width, a.x + a.width) - Math.max(out.x, a.x);
+    const h = Math.min(out.y + out.height, a.y + a.height) - Math.max(out.y, a.y);
+    return w > 0 && h > 0 ? w * h : 0;
+  };
+
+  // Mindestens ein Zipfel muss sichtbar sein, sonst waere das Fenster weg
+  const home = displays.reduce((best, d) => (overlap(d) > overlap(best) ? d : best), displays[0]);
+  const area = home ? home.workArea : { x: 0, y: 0, width: out.width, height: out.height };
+
+  if (!home || overlap(home) < 120 * 60) {
     out.x = null;
     out.y = null;
   }
+
+  out.width = Math.max(760, Math.min(out.width, area.width));
+  out.height = Math.max(520, Math.min(out.height, area.height));
+  if (out.x != null) out.x = Math.max(area.x, Math.min(out.x, area.x + area.width - out.width));
+  if (out.y != null) out.y = Math.max(area.y, Math.min(out.y, area.y + area.height - out.height));
   return out;
 }
 
 function showMainWindow() {
   if (!mainWindow || mainWindow.isDestroyed()) {
     createMainWindow();
+    mainWindow.once('ready-to-show', () => mainWindow.show());
     return;
   }
   if (mainWindow.isMinimized()) mainWindow.restore();
@@ -168,17 +234,10 @@ function toggleMainWindow() {
  * in der Liste, ohne dass man die App sucht.
  */
 function createQuickWindow() {
-  const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
-  const width = 680;
-  const height = 108; // genau so hoch wie die Karte - der Rest waere unsichtbar klickbar
-  const x = Math.round(display.workArea.x + (display.workArea.width - width) / 2);
-  const y = Math.round(display.workArea.y + display.workArea.height * 0.22);
+  const place = quickBounds();
 
   quickWindow = new BrowserWindow({
-    width,
-    height,
-    x,
-    y,
+    ...place,
     frame: false,
     transparent: true,
     resizable: false,
@@ -197,7 +256,18 @@ function createQuickWindow() {
     },
   });
 
+  // Ueber Vollbild-Anwendungen und Bildschirmschoner-Ebene: sonst verschwindet
+  // das Fenster unter der praesentierenden Teams-Sitzung, aus der die Aufgabe kommt.
+  quickWindow.setAlwaysOnTop(true, 'screen-saver');
   quickWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+
+  quickReady = new Promise((resolve) => {
+    quickWindow.once('ready-to-show', resolve);
+    // Falls 'ready-to-show' ausbleibt (transparente Fenster, exotische WMs),
+    // darf das Kuerzel nicht dauerhaft blockiert sein.
+    setTimeout(resolve, 4000);
+  });
+
   quickWindow.loadFile(path.join(RENDERER, 'quick.html'));
 
   // Klick daneben schliesst das Fenster wieder - ausser die Entwicklertools
@@ -210,19 +280,31 @@ function createQuickWindow() {
 
   quickWindow.on('closed', () => {
     quickWindow = null;
+    quickReady = null;
   });
 }
 
-function showQuickWindow() {
-  if (!quickWindow || quickWindow.isDestroyed()) createQuickWindow();
-
+/** Mittig oben auf dem Bildschirm, auf dem gerade die Maus steht. */
+function quickBounds() {
   const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
-  const [width, height] = quickWindow.getSize();
-  quickWindow.setPosition(
-    Math.round(display.workArea.x + (display.workArea.width - width) / 2),
-    Math.round(display.workArea.y + display.workArea.height * 0.22)
-  );
+  const area = display.workArea;
+  const width = Math.min(QUICK_WIDTH, Math.max(320, area.width - 40));
+  return {
+    width,
+    height: QUICK_HEIGHT,
+    x: Math.round(area.x + (area.width - width) / 2),
+    y: Math.round(area.y + area.height * 0.22),
+  };
+}
 
+async function showQuickWindow() {
+  if (!quickWindow || quickWindow.isDestroyed()) createQuickWindow();
+  // Beim allerersten Aufruf ist der Inhalt noch nicht da; ohne das Warten
+  // ginge der Fokus-Befehl ins Leere und das Feld bliebe tot.
+  await quickReady;
+  if (!quickWindow || quickWindow.isDestroyed()) return;
+
+  quickWindow.setBounds(quickBounds());
   quickWindow.show();
   quickWindow.focus();
   quickWindow.webContents.send('quick:focus');
@@ -235,25 +317,52 @@ function hideQuickWindow() {
 // -------------------------------------------------------------------- Tray
 
 function createTray() {
-  const image = nativeImage.createFromPath(path.join(ASSETS, 'tray.png'));
-  tray = new Tray(image.isEmpty() ? nativeImage.createEmpty() : image);
-  tray.setToolTip('Tagwerk');
-  refreshTrayMenu();
+  try {
+    const image = nativeImage.createFromPath(path.join(ASSETS, 'tray.png'));
+    tray = new Tray(image.isEmpty() ? nativeImage.createEmpty() : image);
+  } catch (err) {
+    // Manche Linux-Desktops haben keinen Infobereich - dann laeuft die App
+    // eben nur mit Fenster weiter.
+    console.warn('[main] Tray nicht verfuegbar:', err.message);
+    notice('tray', 'warn', 'Der Infobereich steht auf diesem System nicht zur Verfügung.');
+    return;
+  }
   tray.on('click', toggleMainWindow);
   tray.on('double-click', showMainWindow);
+  refreshTrayMenu();
 }
 
+/** Tooltip + Menue neu aufbauen; zeigt die offenen Aufgaben ohne Umweg ueber das Fenster. */
 function refreshTrayMenu() {
-  if (!tray) return;
+  if (!tray || tray.isDestroyed()) return;
+
+  const c = store ? store.counts() : { open: 0, overdue: 0, today: 0 };
+  const lines = ['Tagwerk', c.open === 1 ? '1 offene Aufgabe' : `${c.open} offene Aufgaben`];
+  if (c.overdue) lines.push(`${c.overdue} davon aus früheren Tagen`);
+  tray.setToolTip(lines.join('\n'));
+
   const shortcut = settings.get('globalShortcutEnabled') ? settings.get('globalShortcut') : '';
   tray.setContextMenu(
     Menu.buildFromTemplate([
+      { label: `Heute offen: ${c.today} · Älteres: ${c.overdue}`, enabled: false },
+      { type: 'separator' },
       { label: 'Tagwerk öffnen', click: showMainWindow },
       { label: 'Schnellerfassung', accelerator: shortcut || undefined, click: showQuickWindow },
       { type: 'separator' },
       {
         label: 'Datenordner öffnen',
         click: () => shell.openPath(app.getPath('userData')),
+      },
+      {
+        label: 'Sicherung jetzt anlegen',
+        click: () => {
+          try {
+            const made = store.createBackup('manuell');
+            notice('sicherung', 'info', `Sicherung „${made.name}" angelegt.`);
+          } catch (err) {
+            notice('sicherung', 'error', `Sicherung fehlgeschlagen: ${err.message}`);
+          }
+        },
       },
       { type: 'separator' },
       {
@@ -266,6 +375,8 @@ function refreshTrayMenu() {
     ])
   );
 }
+
+const refreshTrayLater = debounce(refreshTrayMenu, 400);
 
 // -------------------------------------------------------- Globales Kuerzel
 
@@ -282,6 +393,7 @@ function registerGlobalShortcut() {
       console.warn(`[main] Tastenkuerzel ${accelerator} ist belegt.`);
       return { ok: false, registered: false, reason: 'belegt' };
     }
+    notices.delete('kuerzel');
     return { ok: true, registered: true };
   } catch (err) {
     console.error('[main] Tastenkuerzel ungueltig:', err.message);
@@ -303,6 +415,17 @@ function buildAppMenu() {
         {
           label: 'Datenordner öffnen',
           click: () => shell.openPath(app.getPath('userData')),
+        },
+        {
+          label: 'Sicherung jetzt anlegen',
+          click: () => {
+            try {
+              const made = store.createBackup('manuell');
+              notice('sicherung', 'info', `Sicherung „${made.name}" angelegt.`);
+            } catch (err) {
+              notice('sicherung', 'error', `Sicherung fehlgeschlagen: ${err.message}`);
+            }
+          },
         },
         { type: 'separator' },
         {
@@ -362,6 +485,111 @@ function currentTheme() {
   };
 }
 
+// ------------------------------------------------------------- Autostart
+
+/**
+ * Die Einstellung und das, was das Betriebssystem tatsaechlich eingetragen hat,
+ * koennen auseinanderlaufen (Neuinstallation, aufgeraeumter Autostart-Ordner).
+ * Beim Start wird das einmal begradigt.
+ */
+function syncLaunchAtLogin() {
+  if (!app.isPackaged) return;
+  if (!['win32', 'darwin'].includes(process.platform)) return;
+  const wanted = !!settings.get('launchAtLogin');
+  try {
+    if (app.getLoginItemSettings({ args: ['--hidden'] }).openAtLogin !== wanted) {
+      app.setLoginItemSettings({ openAtLogin: wanted, args: ['--hidden'] });
+    }
+  } catch (err) {
+    console.warn('[main] Autostart konnte nicht geprueft werden:', err.message);
+  }
+}
+
+function setLaunchAtLogin(enabled) {
+  if (!app.isPackaged) return { ok: true, enabled: !!enabled, supported: false, reason: 'Nur in der installierten Version wirksam.' };
+  if (!['win32', 'darwin'].includes(process.platform)) {
+    return { ok: false, enabled: false, supported: false, reason: 'Autostart wird auf diesem System nicht unterstützt.' };
+  }
+  try {
+    app.setLoginItemSettings({ openAtLogin: !!enabled, args: ['--hidden'] });
+    return { ok: true, enabled: app.getLoginItemSettings({ args: ['--hidden'] }).openAtLogin, supported: true };
+  } catch (err) {
+    return { ok: false, enabled: false, supported: true, reason: err.message };
+  }
+}
+
+// ------------------------------------------------------------------ Status
+
+/** Meldung des Main-Prozesses vormerken (gleiche Form wie die des Stores). */
+function notice(code, level, message) {
+  notices.set(code, { code, level, message, at: new Date().toISOString(), count: 1 });
+  broadcast('status:changed', appStatus());
+  reportProblems();
+}
+
+function dismissNotice(code) {
+  return notices.delete(code) || (store ? store.dismissProblem(code) : false);
+}
+
+/** Alles, was die Oberflaeche ueber den Zustand der Ablage wissen sollte. */
+function appStatus() {
+  const base = store
+    ? store.status()
+    : { problems: [], readOnly: false, dataPath: null, backupDir: null, pendingChanges: false };
+  return {
+    ...base,
+    counts: store ? store.counts() : null,
+    settingsError: settings ? settings.lastError : null,
+    problems: [...base.problems, ...notices.values()],
+  };
+}
+
+/**
+ * Wenn die Ablage klemmt, darf das nicht nur im Log stehen: der Renderer kann
+ * die Meldung anzeigen, aber verlassen wollen wir uns darauf nicht - harte
+ * Fehler bekommen zusaetzlich einen Systemdialog, einmal pro Sitzung.
+ */
+function reportProblems() {
+  for (const problem of appStatus().problems) {
+    if (problem.level !== 'error' || shown.has(problem.code)) continue;
+    shown.add(problem.code);
+    // Bewusst showMessageBox statt showErrorBox: das blockiert den Main-Prozess
+    // nicht, waehrend im Hintergrund weiter gespeichert wird.
+    dialog
+      .showMessageBox({
+        type: 'error',
+        title: 'Tagwerk',
+        message: 'Problem mit der Datenablage',
+        detail: problem.message,
+        buttons: ['OK'],
+        noLink: true,
+      })
+      .catch(() => {});
+  }
+}
+
+// ------------------------------------------------------------- Absicherung
+
+/**
+ * Der Renderer darf nirgendwo hin navigieren und braucht keine Berechtigungen.
+ * Beides gilt zwar schon durch CSP und contextIsolation - doppelt haelt besser.
+ */
+function hardenWebContents() {
+  app.on('web-contents-created', (_event, contents) => {
+    contents.on('will-navigate', (event, url) => {
+      if (!url.startsWith('file://')) {
+        event.preventDefault();
+        if (/^https?:/.test(url)) shell.openExternal(url);
+      }
+    });
+    contents.session.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
+    contents.on('render-process-gone', (_e, details) => {
+      console.error('[main] Renderer beendet:', details.reason);
+      if (contents === (mainWindow && mainWindow.webContents) && !quitting) contents.reload();
+    });
+  });
+}
+
 // --------------------------------------------------------------- Hilfsmittel
 
 function broadcast(channel, payload) {
@@ -389,29 +617,55 @@ function publicApi() {
     applyTheme,
     currentTheme,
     broadcast,
+    appStatus,
+    notice,
+    dismissNotice,
     isDev,
     getMainWindow: () => mainWindow,
-    setLaunchAtLogin(enabled) {
-      if (!app.isPackaged) return false; // im Dev-Modus sinnlos
-      app.setLoginItemSettings({ openAtLogin: !!enabled, args: ['--hidden'] });
-      return app.getLoginItemSettings().openAtLogin;
-    },
+    setLaunchAtLogin,
   };
 }
 
 // ------------------------------------------------------------- App-Lifecycle
 
+/** Alles Ausstehende auf die Platte. Mehrfach aufrufbar - beides ist idempotent. */
+function flushAll() {
+  try {
+    if (store) store.flush();
+  } catch (err) {
+    console.error('[main] Store-Flush fehlgeschlagen:', err.message);
+  }
+  try {
+    if (settings) settings.flush();
+  } catch (err) {
+    console.error('[main] Settings-Flush fehlgeschlagen:', err.message);
+  }
+}
+
 app.on('before-quit', () => {
   quitting = true;
-  if (store) store.flush();
+  flushAll();
 });
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
+  flushAll();
+  if (tray && !tray.isDestroyed()) tray.destroy();
 });
+
+// Letzte Rettung: bei app.exit(), Strg+C oder Abmelden laeuft 'before-quit'
+// nicht immer durch. flushAll() ist synchron und darf hier stehen.
+process.on('exit', flushAll);
+for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
+  process.on(signal, () => {
+    quitting = true;
+    flushAll();
+    app.quit();
+  });
+}
 
 app.on('window-all-closed', () => {
   // Tray-App: laeuft weiter, ausser auf macOS gilt die uebliche Konvention
   if (process.platform === 'darwin') return;
-  if (!settings || !settings.get('closeToTray')) app.quit();
+  if (!settings || !settings.get('closeToTray') || !tray) app.quit();
 });
