@@ -260,8 +260,9 @@ function createMainWindow() {
 
   // Strg+Mausrad zoomt nur, wenn wir es selbst umsetzen - und nur dann wissen
   // wir auch, was wir uns merken muessen.
+  // 'in' / 'out' - Electron meldet nur den Wunsch, umsetzen muessen wir es selbst.
   mainWindow.webContents.on('zoom-changed', (_event, direction) => {
-    setZoom(currentZoom().level + (direction === 'zoomIn' ? 0.5 : -0.5));
+    setZoom(currentZoom().level + (direction === 'in' ? 0.5 : -0.5));
   });
 
   // Strg + Plus/Minus/Null selbst abfangen: die Menue-Kuerzel greifen nicht auf
