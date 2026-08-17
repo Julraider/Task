@@ -55,8 +55,11 @@ const api = {
   onThemeChanged: (cb) => on('theme:changed', cb),
 
   // --- Export / Import -----------------------------------------------------
-  copyToClipboard: (text) => ipcRenderer.invoke('clipboard:write', { text }),
-  exportFile: (format, dayKeys, scope) => ipcRenderer.invoke('export:save', { format, dayKeys, scope }),
+  // `html` ist optional: nur damit landet ein Bericht formatiert in einer
+  // Outlook-Mail statt als Rohtext mit sichtbaren Auszeichnungen.
+  copyToClipboard: (text, html) => ipcRenderer.invoke('clipboard:write', { text, html }),
+  exportFile: (format, dayKeys, scope, options) =>
+    ipcRenderer.invoke('export:save', { format, dayKeys, scope, options }),
   importFile: (mode) => ipcRenderer.invoke('data:import', { mode }),
 
   // --- Schnellerfassung ----------------------------------------------------

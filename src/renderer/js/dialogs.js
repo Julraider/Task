@@ -263,41 +263,16 @@ window.Dialogs = (function () {
   // -------------------------------------------------------------- Export
 
   /**
-   * Verfuegbare Formate. `file: false` heisst: der Main-Prozess kennt das
-   * Format beim Speichern nicht, es geht nur in die Zwischenablage.
+   * Die Formatliste kommt aus dem Exporter selbst - so taucht ein dort
+   * ergaenztes Format ohne weiteres Zutun im Dialog auf.
    */
   function exportFormats() {
-    const list = [
-      {
-        id: 'md',
-        label: 'Markdown – Wochenbericht, Mail, Standup',
-        file: true,
-        build: (items, keys) =>
-          keys.length === 1 ? Exporter.dayMarkdown(items, keys[0]) : Exporter.weekMarkdown(items, keys),
-      },
-      {
-        id: 'csv',
-        label: 'CSV – für Excel (Semikolon, mit Umlauten)',
-        file: true,
-        build: (items) => Exporter.csv(items),
-      },
-      {
-        id: 'json',
-        label: 'JSON – Sicherung und Wiederimport',
-        file: true,
-        build: (items) => JSON.stringify({ version: 1, items }, null, 2),
-      },
-    ];
+    return Exporter.FORMATS;
+  }
 
-    if (typeof Exporter.plain === 'function') {
-      list.push({
-        id: 'txt',
-        label: 'Klartext – kurze Liste zum Reinkopieren',
-        file: false,
-        build: (items, keys) => Exporter.plain(items, keys),
-      });
-    }
-    return list;
+  /** Nur die Berichtsformate lassen sich sinnvoll gruppieren. */
+  function supportsGrouping(formatId) {
+    return formatId === 'md' || formatId === 'html';
   }
 
   function openExport() {
@@ -315,10 +290,15 @@ window.Dialogs = (function () {
       ...formats.map((f) => h('option', { value: f.id }, f.label))
     );
 
+    const groupSelect = h('select', { class: 'field', 'aria-label': 'Gruppierung' },
+      ...Exporter.GROUPINGS.map((g) => h('option', { value: g.id }, g.label))
+    );
+    const groupField = field('Gliederung', groupSelect);
+
     const preview = h('pre', { class: 'dialog__preview', tabindex: '0', 'aria-label': 'Vorschau' });
     const fileHint = h('p', { class: 'dialog__hint' });
 
-    const format = () => formats.find((f) => f.id === formatSelect.value) || formats[0];
+    const format = () => Exporter.formatById(formatSelect.value);
 
     function dayKeys() {
       if (scopeSelect.value === 'woche') return State.weekDays();
@@ -326,17 +306,25 @@ window.Dialogs = (function () {
       return [state.cursorDay];
     }
 
-    function buildText() {
-      const items = State.get().items;
-      const keys = dayKeys();
-      const subset = scopeSelect.value === 'alle' ? items : items.filter((i) => keys.includes(i.day));
-      return format().build(subset, keys, scopeSelect.value);
+    /** Umfang "Alles" heisst: keine Tagesliste, der Exporter nimmt dann alles. */
+    function selection() {
+      return scopeSelect.value === 'alle' ? null : dayKeys();
+    }
+
+    function options(extra) {
+      const opts = { version: 1, ...extra };
+      if (supportsGrouping(formatSelect.value)) opts.groupBy = groupSelect.value;
+      return opts;
+    }
+
+    function buildText(extra) {
+      return Exporter.build(formatSelect.value, State.get().items, selection(), options(extra));
     }
 
     const saveBtn = h('button', {
       class: 'btn btn--primary', type: 'button',
       onclick: async () => {
-        const res = await api.exportFile(format().id, dayKeys(), scopeSelect.value);
+        const res = await api.exportFile(formatSelect.value, dayKeys(), scopeSelect.value, options());
         if (res.canceled) return;
         if (!res.ok) Util.toast(res.error || 'Export fehlgeschlagen', { tone: 'error' });
         else Util.toast('Gespeichert: ' + res.path);
@@ -349,18 +337,23 @@ window.Dialogs = (function () {
       const count = text ? text.split('\n').length : 0;
       preview.textContent = text.length > 4000 ? text.slice(0, 4000) + '\n…' : text || '(nichts zu exportieren)';
 
-      saveBtn.disabled = !format().file || !text;
-      fileHint.textContent = format().file
-        ? `${Util.plural(count, 'Zeile', 'Zeilen')} · Speichern fragt nach dem Ort.`
-        : 'Dieses Format geht nur in die Zwischenablage.';
+      // Ueber style statt [hidden]: die Felder sind Flex-Container, da greift
+      // das hidden-Attribut nicht.
+      groupField.style.display = supportsGrouping(formatSelect.value) ? '' : 'none';
+      saveBtn.disabled = !text;
+      fileHint.textContent =
+        formatSelect.value === 'html'
+          ? 'Wird formatiert eingefügt – in einer Outlook-Mail einfach Strg + V.'
+          : `${Util.plural(count, 'Zeile', 'Zeilen')} · Speichern fragt nach dem Ort.`;
     }
 
     scopeSelect.addEventListener('change', refresh);
     formatSelect.addEventListener('change', refresh);
+    groupSelect.addEventListener('change', refresh);
     refresh();
 
     body.append(
-      group('Umfang', field('Bereich', scopeSelect), field('Format', formatSelect), fileHint),
+      group('Umfang', field('Bereich', scopeSelect), field('Format', formatSelect), groupField, fileHint),
       group('Vorschau', preview)
     );
 
@@ -374,7 +367,16 @@ window.Dialogs = (function () {
             Util.toast('Nichts zu kopieren', { tone: 'error' });
             return;
           }
-          await api.copyToClipboard(text);
+          // Beim HTML-Bericht wandert zusaetzlich der Klartext mit, damit auch
+          // ein einfaches Textfeld etwas Lesbares bekommt.
+          if (formatSelect.value === 'html') {
+            await api.copyToClipboard(
+              Exporter.build('md', State.get().items, selection(), options()),
+              buildText({ fragment: true })
+            );
+          } else {
+            await api.copyToClipboard(text);
+          }
           Util.toast('In die Zwischenablage kopiert');
           close();
         },
@@ -383,14 +385,22 @@ window.Dialogs = (function () {
     );
   }
 
+  /** Kopiert Markdown *und* HTML - Outlook nimmt das formatierte, Notepad den Text. */
+  async function copyRange(days, label) {
+    const items = State.get().items;
+    await api.copyToClipboard(
+      Exporter.build('md', items, days),
+      Exporter.html(items, days, { fragment: true })
+    );
+    Util.toast(label);
+  }
+
   async function copyDay(day) {
-    await api.copyToClipboard(Exporter.dayMarkdown(State.get().items, day));
-    Util.toast(`${Dates.relativeLabel(day)} in die Zwischenablage kopiert`);
+    await copyRange([day], `${Dates.relativeLabel(day)} in die Zwischenablage kopiert`);
   }
 
   async function copyWeek(days) {
-    await api.copyToClipboard(Exporter.weekMarkdown(State.get().items, days));
-    Util.toast('Woche in die Zwischenablage kopiert');
+    await copyRange(days, 'Woche in die Zwischenablage kopiert');
   }
 
   // --------------------------------------------------------------- Hilfe
@@ -405,8 +415,20 @@ window.Dialogs = (function () {
       ['@quelle', 'Woher kam die Aufgabe: ' + sourceList + ' (Kurzformen wie @out oder @snow gehen auch)'],
       ['#tag', 'Beliebig viele Schlagworte, z. B. #netzwerk'],
       ['!  /  !!', 'Priorität hoch bzw. dringend'],
-      ['>tag', 'Zieltag: >heute >morgen >uebermorgen >gestern, >mo … >so, >+3, >-1, >24.12., >2026-12-24'],
-      ['INC0012345', 'Ticketnummern (INC, RITM, REQ, CHG, PRB, SCTASK, TASK, KB) werden als Referenz erkannt und setzen die Quelle auf Ticket'],
+      ['>tag', 'Zieltag: >heute >morgen >uebermorgen, >mo … >so, >+3, >24.12., >2026-12-24'],
+      ['>nächste woche', 'Auch in Worten: >ende der woche, >nächsten montag, >kw35, >monatsende, >in 3 tagen, >in 2 wochen'],
+      ['INC0012345', 'Ticketnummern (INC, RITM, REQ, CHG, PRB, SR, SCTASK, CTASK, TASK, KB) werden als Referenz erkannt und setzen die Quelle auf Ticket – auch aus einem eingefügten ServiceNow- oder Jira-Link'],
+    ];
+
+    const listKeys = [
+      ['↑  /  ↓', 'Durch die Aufgaben blättern (in der Wochenansicht auch ← / →)'],
+      ['Leertaste', 'Erledigt / wieder offen'],
+      ['Enter', 'Auf- und zuklappen'],
+      ['e', 'Bearbeiten'],
+      ['m', 'Einen Tag weiterschieben (Liegengebliebenes auf heute)'],
+      ['x', 'Aufgabe auswählen – mehrere auf einmal bearbeiten'],
+      ['Umschalt + ↑ / ↓', 'Mehrere Aufgaben am Stück auswählen'],
+      ['Entf', 'Löschen (mit Rückgängig-Hinweis)'],
     ];
 
     const keys = [
@@ -443,6 +465,8 @@ window.Dialogs = (function () {
         hint('Was nicht erkannt wird, bleibt Teil des Titels – „Umsatz >1000 prüfen" wandert also nirgendwohin. ' +
           'Unter dem Feld steht live, was erkannt wurde.')),
       group('Tastenkürzel', table(keys)),
+      group('In der Liste', table(listKeys),
+        hint('Gilt, sobald eine Karte den Fokus hat – einmal hineinklicken oder mit Tab dorthin wechseln.')),
       group('Schnellerfassung', table(quickKeys),
         hint('Das kleine Fenster erscheint über allem anderen – auch wenn Tagwerk im Hintergrund läuft. ' +
           'Das systemweite Kürzel dafür steht in den Einstellungen; dort ist auch zu sehen, ob es wirklich greift.')),
