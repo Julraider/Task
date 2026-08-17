@@ -10,19 +10,29 @@ steht da, was man gemacht hat.
 ## Was die App kann
 
 - **Erfassen in einer Zeile** – Quelle, Tags, Priorität und Zieltag stehen mit
-  im Text (`Switch tauschen @muendlich #netzwerk ! >morgen`), der Rest wird
-  automatisch erkannt.
+  im Text (`Switch tauschen @muendlich #netzwerk ! >nächste woche`), der Rest
+  wird automatisch erkannt. Beim Tippen werden `@quellen` und `#schlagworte`
+  vervollständigt.
 - **Schnellerfassung per globalem Tastenkürzel** (`Strg + Alt + T`) – ein
   kleines Fenster erscheint über allem anderen, auch wenn Tagwerk gerade im
   Hintergrund läuft. Tippen, Enter, weg.
 - **Tages- und Wochenansicht** – die Woche als Spalten, Aufgaben lassen sich
-  zwischen den Tagen ziehen.
+  zwischen den Tagen ziehen. Die Tagesliste lässt sich nach Status oder Quelle
+  gruppieren.
+- **Ohne Maus bedienbar** – durch die Liste blättern, erledigen, bearbeiten,
+  verschieben, mehrere auswählen: alles über die Tastatur.
 - **Nichts fällt hinten runter** – offene Aufgaben aus früheren Tagen stehen
-  oben in der Tagesansicht und lassen sich mit einem Klick herholen.
+  oben in der Tagesansicht, nach Tagen gebündelt, und lassen sich mit einem
+  Klick herholen.
 - **Vier Zustände**: offen → in Arbeit → wartet → erledigt, per Klick auf den
   Kreis links durchschaltbar.
-- **Export** als Markdown (für den Wochenbericht oder eine Mail), CSV (Excel)
-  oder JSON (Sicherung). Auch direkt in die Zwischenablage.
+- **Export** als Markdown-Bericht mit Kennzahlen, als **HTML zum Einfügen in
+  eine Outlook-Mail** (Outlook versteht kein Markdown), als Standup-Liste, als
+  CSV für Excel oder als JSON zur Sicherung – wahlweise in eine Datei oder
+  direkt in die Zwischenablage, gegliedert nach Tag, Kalenderwoche, Quelle
+  oder Schlagwort.
+- **Die Daten sind sicher** – atomares Schreiben, tägliche Sicherungen mit
+  Rotation, Sicherung vor jeder riskanten Aktion.
 - **Läuft im Infobereich weiter**, wenn man das Fenster schließt.
 - **Hell/Dunkel** nach Systemeinstellung oder fest gewählt.
 
@@ -34,7 +44,7 @@ steht da, was man gemacht hat.
 npm install     # einmalig, lädt Electron herunter
 npm start       # App starten
 npm run dev     # dasselbe mit geöffneten Entwicklertools
-npm test        # Tests für Datum, Parser, Export und Persistenz
+npm test        # 108 Tests für Datum, Parser, Export und Persistenz
 ```
 
 Getestet mit Node 22 und Electron 43.
@@ -47,15 +57,21 @@ Alles kommt in eine Zeile, die Reihenfolge ist egal:
 
 | Eingabe | Bedeutung |
 | --- | --- |
-| `@teams` | Quelle. Möglich: `@teams` `@mail` `@ticket` `@muendlich` `@telefon` `@meeting` `@selbst` `@sonstiges` |
+| `@teams` | Quelle: `@teams` `@mail` `@ticket` `@jira` `@muendlich` `@telefon` `@meeting` `@vorort` `@wiki` `@selbst` `@sonstiges` |
 | `#netzwerk` | Schlagwort, beliebig viele |
 | `!` bzw. `!!` | Priorität hoch bzw. dringend |
-| `>morgen` | Zieltag: `>heute` `>morgen` `>uebermorgen`, Wochentage `>mo`…`>so`, `>+3`, `>24.12.` |
-| `INC0012345` | Ticketnummern (INC, RITM, REQ, CHG, PRB, SCTASK, TASK, KB) werden als Referenz erkannt und setzen die Quelle auf Ticket |
+| `>morgen` | Zieltag: `>heute` `>morgen` `>uebermorgen`, Wochentage `>mo`…`>so`, `>+3`, `>24.12.`, `>2026-12-24` |
+| `>nächste woche` | Auch in Worten: `>ende der woche` `>nächsten montag` `>kw35` `>monatsende` `>in 3 tagen` `>in 2 wochen` |
+| `INC0012345` | Ticketnummern (INC, RITM, REQ, CHG, PRB, SR, SCTASK, CTASK, TASK, KB) werden als Referenz erkannt und setzen die Quelle auf Ticket – auch aus einem eingefügten ServiceNow- oder Jira-Link |
 
-Unter dem Feld steht live, was erkannt wurde. Alles, was nicht erkannt wird,
-bleibt einfach Teil des Titels – `Umsatz >1000 prüfen` wird also nicht
-versehentlich verschoben.
+Kurzformen und Tippfehler bei der Quelle sind erlaubt: `@out` → Outlook,
+`@snow` → ServiceNow, `@tems` → Teams. Umlaute spielen keine Rolle
+(`@Mündlich` = `@muendlich`).
+
+Unter dem Feld steht live, was erkannt wurde. Alles, was **nicht sicher**
+erkannt wird, bleibt einfach Teil des Titels – `Umsatz >1000 prüfen` wird also
+nicht versehentlich verschoben, und eine mehrdeutige Abkürzung wie `@m` (Mail?
+Meeting? Mündlich?) wird bewusst nicht geraten, sondern stehen gelassen.
 
 ### Tastenkürzel
 
@@ -63,16 +79,34 @@ versehentlich verschoben.
 | --- | --- |
 | `Strg + Alt + T` | Schnellerfassung – wirkt systemweit (in den Einstellungen änderbar) |
 | `Strg + N` | Cursor in die Erfassungszeile |
+| `Tab` | In der Erfassungszeile: nächster Vorschlag für `@quelle` / `#tag` |
 | `Strg + F` | Suchen |
+| `Strg + Umschalt + F` | Alle Filter zurücksetzen |
 | `Strg + 1` / `Strg + 2` | Tages- / Wochenansicht |
 | `Strg + E` | Exportieren |
 | `Strg + ,` | Einstellungen |
 | `Alt + ←` / `Alt + →` | einen Tag bzw. eine Woche zurück / vor |
 | `Alt + ↓` | zurück zu heute |
 | `F1` | Kurzanleitung |
-| `Esc` | Suche leeren, Bearbeitung abbrechen, Schnellerfassung schließen |
+| `Esc` | Vorschlag verwerfen, Feld leeren, Filter zurücksetzen, Dialog schließen |
 
-In der Bearbeitungsmaske speichert `Strg + Enter`.
+In der Liste (sobald eine Karte den Fokus hat):
+
+| Kürzel | Wirkung |
+| --- | --- |
+| `↑` / `↓` | durch die Aufgaben blättern (in der Wochenansicht auch `←` / `→`) |
+| `Leertaste` | erledigt / wieder offen |
+| `Enter` | auf- und zuklappen |
+| `e` | bearbeiten |
+| `m` | einen Tag weiterschieben (Liegengebliebenes auf heute) |
+| `x` | auswählen – mehrere auf einmal bearbeiten |
+| `Umschalt + ↑`/`↓` | mehrere am Stück auswählen |
+| `Entf` | löschen (mit Rückgängig-Hinweis) |
+
+In der Bearbeitungsmaske speichert `Strg + Enter`. In der Schnellerfassung
+speichert `Umschalt + Enter`, ohne das Fenster zu schließen – so lassen sich
+mehrere Aufgaben hintereinander erfassen; `↑`/`↓` blättert durch die zuletzt
+erfassten Zeilen.
 
 ## Wo liegen die Daten?
 
@@ -86,10 +120,26 @@ direkt hin.
 | macOS | `~/Library/Application Support/Tagwerk/tagwerk-data.json` |
 | Linux | `~/.config/Tagwerk/tagwerk-data.json` |
 
-Daneben liegen `settings.json` (Einstellungen, Fensterposition) und
-`tagwerk-data.json.bak` – die jeweils vorherige Fassung der Daten. Geschrieben
-wird gebündelt und atomar (erst `.tmp`, dann umbenennen), ein Absturz mitten im
-Speichern kostet also höchstens die letzte Sekunde.
+Daneben liegen `settings.json` (Einstellungen, Fensterposition),
+`tagwerk-data.json.bak` (die jeweils vorherige Fassung) und der Ordner
+`backups/`:
+
+| Datei | wann sie entsteht |
+| --- | --- |
+| `tag-JJJJ-MM-TT.json` | einmal täglich beim Start, die letzten 14 Tage (einstellbar) |
+| `sicherung-<zeit>-<grund>.json` | vor riskanten Aktionen: Import, Aufräumen, Wiederherstellen |
+| `defekt-<zeit>.json` | eine unlesbare Datendatei wird weggesichert, nie überschrieben |
+| `konflikt-<zeit>.json` | jemand anders hat die Datei verändert (zweite Instanz, Cloud-Ordner) |
+
+Geschrieben wird gebündelt und wirklich atomar: erst in eine `.tmp`-Datei,
+dann `fsync`, dann umbenennen, dann das Verzeichnis synchronisieren. Ohne das
+`fsync` stünde nach einem Stromausfall zwar der richtige Dateiname da –
+möglicherweise aber mit leerem Inhalt.
+
+Stammt die Datei aus einer neueren Programmversion oder lässt sie sich nicht
+schreiben, rührt Tagwerk sie **nicht** an, sondern legt Änderungen in einer
+Notablage ab und sagt Bescheid. Lieber ein sichtbarer Fehler als stiller
+Datenverlust.
 
 ## Aufbau des Projekts
 
@@ -174,8 +224,9 @@ Ein paar naheliegende Stellen:
 - **Neuer Status**: `STATUSES` und `STATUS_CYCLE` in derselben Datei, dazu eine
   Farbregel in `styles.css` (`.item[data-status='…']`).
 - **Weitere Ticket-Präfixe**: `REF_PATTERN` in `src/shared/parse.js`.
-- **Anderes Exportformat**: eine Funktion in `src/shared/export.js` und ein
-  Eintrag im Format-Auswahlfeld in `dialogs.js`.
+- **Anderes Exportformat**: eine Funktion in `src/shared/export.js`, einen
+  Eintrag in dessen `FORMATS` und einen Zweig in `build()` – der Export-Dialog
+  liest die Liste selbst aus und zeigt das Format ohne weiteres Zutun an.
 - **Eigenes Icon**: die PNGs in `assets/` ersetzen (oder `scripts/make-icons.js`
   anpassen und `npm run icons` laufen lassen).
 
