@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; form-action 'none';"
+    />
+    <title>Schnellerfassung</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="quickbody">
+    <div class="quick" id="quickCard">
+      <form class="quick__form" id="quickForm" autocomplete="off">
+        <span class="quick__mark" aria-hidden="true">✓</span>
+        <input
+          class="quick__input"
+          id="quickInput"
+          type="text"
+          placeholder="Was ist reingekommen?"
+          spellcheck="false"
+        />
+      </form>
+      <div class="quick__hint" id="quickHint">
+        <span class="quick__keys"><kbd>Enter</kbd> speichern · <kbd>Esc</kbd> schließen</span>
+      </div>
+    </div>
+
+    <script src="../shared/dates.js"></script>
+    <script src="../shared/model.js"></script>
+    <script src="../shared/parse.js"></script>
+    <script src="js/quick.js"></script>
+  </body>
+</html>
