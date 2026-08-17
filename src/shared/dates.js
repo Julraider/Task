@@ -144,36 +144,37 @@
   }
 
   function shortWeekday(key) {
-    return WEEKDAYS_SHORT[weekday(key)];
+    return isValidKey(key) ? WEEKDAYS_SHORT[weekday(key)] : '';
+  }
+
+  /**
+   * Beschriftungen aus einem Tagesschluessel. Ohne gueltigen Schluessel kommt
+   * ein leerer String zurueck - so steht in einem Bericht notfalls nichts,
+   * statt 'Invalid Date' oder 'undefined'.
+   */
+  function localeDate(key, options) {
+    if (!isValidKey(key)) return '';
+    return parseKey(key).toLocaleDateString('de-DE', options);
   }
 
   /** 'Montag, 17. August 2026' */
   function formatLong(key) {
-    return parseKey(key).toLocaleDateString('de-DE', {
-      weekday: 'long',
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    });
+    return localeDate(key, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   }
 
   /** '17.08.' */
   function formatShort(key) {
-    return parseKey(key).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+    return localeDate(key, { day: '2-digit', month: '2-digit' });
   }
 
   /** '17.08.2026' - fest zweistellig, damit Berichte und Dateinamen buendig sind. */
   function formatNumeric(key) {
-    return parseKey(key).toLocaleDateString('de-DE', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    });
+    return localeDate(key, { day: '2-digit', month: '2-digit', year: 'numeric' });
   }
 
   /** 'August 2026' */
   function monthLabel(key) {
-    return parseKey(key).toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
+    return localeDate(key, { month: 'long', year: 'numeric' });
   }
 
   /**
@@ -182,7 +183,8 @@
    * sonst beide Daten voll.
    */
   function rangeLabel(startKey, endKey) {
-    if (!endKey || startKey === endKey) return formatNumeric(startKey);
+    if (!isValidKey(startKey)) return '';
+    if (!endKey || startKey === endKey || !isValidKey(endKey)) return formatNumeric(startKey);
     const a = parseKey(startKey);
     const b = parseKey(endKey);
     if (a.getFullYear() === b.getFullYear()) {

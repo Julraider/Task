@@ -23,27 +23,39 @@
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else root.Model = factory();
 })(typeof self !== 'undefined' ? self : this, function () {
+  /*
+   * Zwei Icon-Felder, mit Absicht:
+   *   icon    das Emoji. Steht im Text- und im Mail-Export und ueberall dort,
+   *           wo nur Zeichen durchgehen - da ist ein Emoji genau richtig.
+   *   iconId  eine stabile, sprechende Kennung fuer das SVG-Icon der
+   *           Oberflaeche. Die Kennung beschreibt das *Motiv*, nicht die
+   *           Quelle - so bleibt sie gueltig, auch wenn eine Quelle einmal
+   *           anders heisst. Neue Quelle = neue Kennung hier eintragen und im
+   *           Icon-Satz der Oberflaeche hinterlegen; wer keine findet, faellt
+   *           auf 'punkte' zurueck.
+   */
   const SOURCES = [
-    { id: 'teams', label: 'Teams', icon: '💬', aliases: ['teams', 'chat', 'ms'] },
-    { id: 'mail', label: 'Outlook / Mail', icon: '✉️', aliases: ['mail', 'outlook', 'email', 'mailbox'] },
-    { id: 'ticket', label: 'ServiceNow / Ticket', icon: '🎫', aliases: ['ticket', 'servicenow', 'snow', 'sn', 'inc'] },
-    { id: 'jira', label: 'Jira / Projekt', icon: '🧩', aliases: ['jira', 'issue', 'backlog', 'sprint', 'story'] },
-    { id: 'muendlich', label: 'Mündlich', icon: '🗣️', aliases: ['muendlich', 'mündlich', 'zuruf', 'flur', 'tuer', 'tür'] },
-    { id: 'telefon', label: 'Telefon', icon: '☎️', aliases: ['telefon', 'anruf', 'call', 'phone'] },
-    { id: 'meeting', label: 'Meeting', icon: '📅', aliases: ['meeting', 'termin', 'besprechung', 'jourfixe', 'jf'] },
-    { id: 'vorort', label: 'Vor Ort', icon: '🚶', aliases: ['vorort', 'vor-ort', 'onsite', 'begehung', 'werkstatt', 'baustelle'] },
-    { id: 'wiki', label: 'Wiki / Doku', icon: '📚', aliases: ['wiki', 'doku', 'dokumentation', 'confluence', 'sharepoint'] },
-    { id: 'selbst', label: 'Eigene Notiz', icon: '📝', aliases: ['selbst', 'eigen', 'idee', 'ich', 'me'] },
-    { id: 'sonstiges', label: 'Sonstiges', icon: '📌', aliases: ['sonstiges', 'sonst', 'misc', 'other'] },
+    { id: 'teams', label: 'Teams', icon: '💬', iconId: 'chat', aliases: ['teams', 'chat', 'ms'] },
+    { id: 'mail', label: 'Outlook / Mail', icon: '✉️', iconId: 'mail', aliases: ['mail', 'outlook', 'email', 'mailbox'] },
+    { id: 'ticket', label: 'ServiceNow / Ticket', icon: '🎫', iconId: 'ticket', aliases: ['ticket', 'servicenow', 'snow', 'sn', 'inc'] },
+    { id: 'jira', label: 'Jira / Projekt', icon: '🧩', iconId: 'puzzle', aliases: ['jira', 'issue', 'backlog', 'sprint', 'story'] },
+    { id: 'muendlich', label: 'Mündlich', icon: '🗣️', iconId: 'sprechblase', aliases: ['muendlich', 'mündlich', 'zuruf', 'flur', 'tuer', 'tür'] },
+    { id: 'telefon', label: 'Telefon', icon: '☎️', iconId: 'telefon', aliases: ['telefon', 'anruf', 'call', 'phone'] },
+    { id: 'meeting', label: 'Meeting', icon: '📅', iconId: 'kalender', aliases: ['meeting', 'termin', 'besprechung', 'jourfixe', 'jf'] },
+    { id: 'vorort', label: 'Vor Ort', icon: '🚶', iconId: 'standort', aliases: ['vorort', 'vor-ort', 'onsite', 'begehung', 'werkstatt', 'baustelle'] },
+    { id: 'wiki', label: 'Wiki / Doku', icon: '📚', iconId: 'buch', aliases: ['wiki', 'doku', 'dokumentation', 'confluence', 'sharepoint'] },
+    { id: 'selbst', label: 'Eigene Notiz', icon: '📝', iconId: 'notiz', aliases: ['selbst', 'eigen', 'idee', 'ich', 'me'] },
+    { id: 'sonstiges', label: 'Sonstiges', icon: '📌', iconId: 'punkte', aliases: ['sonstiges', 'sonst', 'misc', 'other'] },
   ];
 
   const DEFAULT_SOURCE = 'sonstiges';
 
+  /** `icon` ist das Zeichen fuer Text-Ausgaben, `iconId` das SVG der Oberflaeche. */
   const STATUSES = [
-    { id: 'offen', label: 'Offen', icon: '○', short: 'Offen' },
-    { id: 'aktiv', label: 'In Arbeit', icon: '◐', short: 'Aktiv' },
-    { id: 'wartet', label: 'Wartet / blockiert', icon: '⏸', short: 'Wartet' },
-    { id: 'erledigt', label: 'Erledigt', icon: '✓', short: 'Erledigt' },
+    { id: 'offen', label: 'Offen', icon: '○', iconId: 'kreis', short: 'Offen' },
+    { id: 'aktiv', label: 'In Arbeit', icon: '◐', iconId: 'halbkreis', short: 'Aktiv' },
+    { id: 'wartet', label: 'Wartet / blockiert', icon: '⏸', iconId: 'pause', short: 'Wartet' },
+    { id: 'erledigt', label: 'Erledigt', icon: '✓', iconId: 'haken', short: 'Erledigt' },
   ];
 
   const DEFAULT_STATUS = 'offen';

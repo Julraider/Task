@@ -97,6 +97,19 @@ test('Beschriftungen fuer Berichte', () => {
   assert.strictEqual(Dates.rangeLabel(MONTAG, MONTAG), '17.08.2026');
 });
 
+test('Beschriftungen bleiben leer statt "Invalid Date"', () => {
+  // Ein Bericht darf bei einer Aufgabe ohne gueltigen Tag nichts erfinden
+  for (const kaputt of [undefined, null, '', 'morgen', '2026-02-31']) {
+    assert.strictEqual(Dates.formatLong(kaputt), '');
+    assert.strictEqual(Dates.formatShort(kaputt), '');
+    assert.strictEqual(Dates.formatNumeric(kaputt), '');
+    assert.strictEqual(Dates.monthLabel(kaputt), '');
+    assert.strictEqual(Dates.shortWeekday(kaputt), '');
+    assert.strictEqual(Dates.rangeLabel(kaputt, MONTAG), '');
+  }
+  assert.strictEqual(Dates.rangeLabel(MONTAG, 'kaputt'), '17.08.2026', 'ein gueltiger Anfang reicht');
+});
+
 test('formatDateTime bleibt leer, wenn nichts da ist', () => {
   assert.match(Dates.formatDateTime('2026-08-17T08:00:00.000Z'), /^\d{2}\.\d{2}\.2026 \d{2}:\d{2}$/);
   assert.strictEqual(Dates.formatDateTime(null), '');
@@ -161,6 +174,27 @@ test('Fehlalarm: mehrdeutige Abkuerzungen werden nicht geraten', () => {
   const r = Parse.parseCapture('Notiz @m');
   assert.strictEqual(r.title, 'Notiz @m');
   assert.strictEqual(r.sourceExplicit, false);
+});
+
+test('Prioritaet nur als eigenstaendiges Ausrufezeichen', () => {
+  assert.strictEqual(Parse.parseCapture('Anruf !').priority, 1);
+  assert.strictEqual(Parse.parseCapture('Anruf !!').priority, 2);
+  assert.strictEqual(Parse.parseCapture('Anruf !!!').priority, 2, 'mehr als dringend gibt es nicht');
+  // Fehlalarm: Ausrufezeichen am Wort sind Satzzeichen
+  const r = Parse.parseCapture('Fertig! melden');
+  assert.strictEqual(r.title, 'Fertig! melden');
+  assert.strictEqual(r.priority, 0);
+  assert.strictEqual(Parse.parseCapture('Achtung !!!! lesen').title, 'Achtung !!!! lesen');
+});
+
+test('Schlagworte brauchen mindestens einen Buchstaben', () => {
+  assert.deepStrictEqual(Parse.parseCapture('Kabel ziehen #netzwerk #3d-druck').tags, ['netzwerk', '3d-druck']);
+  assert.deepStrictEqual(Parse.parseCapture('Umbau #Netzwerk #NETZWERK').tags, ['netzwerk'], 'keine Dubletten');
+  // Fehlalarm: Nummern und Satzzeichen sind keine Schlagworte und bleiben stehen
+  const r = Parse.parseCapture('Rechnung #4711 pruefen');
+  assert.strictEqual(r.title, 'Rechnung #4711 pruefen');
+  assert.deepStrictEqual(r.tags, []);
+  assert.strictEqual(Parse.parseCapture('Angebot #!! schicken').title, 'Angebot #!! schicken');
 });
 
 test('Ticketnummer setzt Referenz und Quelle', () => {
@@ -374,6 +408,38 @@ test('jede Quelle hat Icon, Label und Aliase', () => {
   assert.strictEqual(Model.sourceById('gibtsnicht').id, Model.DEFAULT_SOURCE);
 });
 
+test('jede Quelle und jeder Status hat eine stabile Icon-Kennung', () => {
+  // Diese Liste ist eine Zusage an die Oberflaeche: die Kennungen benennen das
+  // Motiv des SVG-Icons und duerfen sich nicht still aendern.
+  assert.deepStrictEqual(
+    Object.fromEntries(Model.SOURCES.map((s) => [s.id, s.iconId])),
+    {
+      teams: 'chat',
+      mail: 'mail',
+      ticket: 'ticket',
+      jira: 'puzzle',
+      muendlich: 'sprechblase',
+      telefon: 'telefon',
+      meeting: 'kalender',
+      vorort: 'standort',
+      wiki: 'buch',
+      selbst: 'notiz',
+      sonstiges: 'punkte',
+    }
+  );
+  assert.deepStrictEqual(Model.STATUSES.map((s) => s.iconId), ['kreis', 'halbkreis', 'pause', 'haken']);
+
+  const alle = [...Model.SOURCES, ...Model.STATUSES].map((e) => e.iconId);
+  assert.strictEqual(new Set(alle).size, alle.length, 'Kennungen muessen eindeutig sein');
+  for (const id of alle) assert.match(id, /^[a-z][a-z-]*$/, `unsauber: ${id}`);
+});
+
+test('die Emoji bleiben neben den Icon-Kennungen erhalten', () => {
+  // Text- und Mail-Export haben keine SVGs - dort ist das Emoji richtig.
+  for (const source of Model.SOURCES) assert.ok(source.icon, `ohne Emoji: ${source.id}`);
+  for (const status of Model.STATUSES) assert.ok(status.icon, `ohne Zeichen: ${status.id}`);
+});
+
 test('die vier Status bleiben unveraendert', () => {
   assert.deepStrictEqual(Model.STATUSES.map((s) => s.id), ['offen', 'aktiv', 'wartet', 'erledigt']);
   assert.deepStrictEqual(Model.STATUS_CYCLE, ['offen', 'aktiv', 'wartet', 'erledigt']);
@@ -509,24 +575,126 @@ test('Standup ohne Aufgaben sagt das auch', () => {
   assert.match(Exporter.standup([], woche), /Nichts erfasst/);
 });
 
-test('HTML bringt seine Formatierung inline mit', () => {
+// Der HTML-Export landet in einer Outlook-Mail, und Outlook fuer Windows
+// rendert mit der Word-Engine. Die folgenden Tests halten fest, was daraus
+// folgt - die Begruendung im Einzelnen steht in export.js.
+
+/** Alle style="..."-Inhalte des Berichts. */
+function styleAttrs(html) {
+  return [...html.matchAll(/style="([^"]*)"/g)].map((m) => m[1]);
+}
+
+/** Alle Einzelangaben ('padding:0 0 3pt') aus allen style-Attributen. */
+function declarations(html) {
+  return styleAttrs(html)
+    .flatMap((s) => s.split(';'))
+    .map((d) => d.trim())
+    .filter(Boolean);
+}
+
+test('HTML ist ein Tabellen-Layout, kein div-Geflecht', () => {
   const out = Exporter.html(sample, woche);
   assert.match(out, /^<!doctype html>/);
-  assert.match(out, /<h1 style="[^"]*">KW/, 'Titel wird aus dem Zeitraum gebaut');
-  assert.match(out, /<li style="[^"]+">/);
-  assert.ok(!out.includes('<style'), 'Outlook wirft <style>-Bloecke weg');
+  assert.ok(!/<div/i.test(out), 'Word wirft margin/padding an <div> weg');
+  assert.ok(!/<ul|<li[ >]/i.test(out), 'Word setzt an Listen seine eigene Einrueckung');
+  assert.match(out, /<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"/);
+  assert.match(out, /border-collapse:collapse/);
+  assert.match(out, /mso-table-lspace:0pt;mso-table-rspace:0pt/, 'sonst setzt Word 7,5pt Luft daneben');
+  assert.match(out, /<td[^>]*>KW 34/, 'der Titel steht in einer Zelle');
   assert.match(out, /Montag, 17\. August 2026/);
   assert.match(out, /&#10003;/, 'Haken fuer Erledigtes');
   assert.match(out, /Rueckruf bei Frau Meier/);
 });
 
+test('HTML meidet alles, was die Word-Engine nicht kann', () => {
+  const out = Exporter.html(sample, woche);
+  for (const verboten of [/<style/i, /class=/i, /@media/i, /@font-face/i, /<font\b/i, /fonts\.googleapis/i]) {
+    assert.ok(!verboten.test(out), `nicht erlaubt: ${verboten}`);
+  }
+  for (const decl of declarations(out)) {
+    assert.ok(!/^(float|position)\s*:/.test(decl), `Word kennt kein ${decl}`);
+    assert.ok(!/^max-width/.test(decl), `Word kennt kein ${decl}`);
+    assert.ok(!/^display\s*:\s*(flex|grid|inline-flex)/.test(decl), `Word kennt kein ${decl}`);
+    assert.ok(!/^background/.test(decl), `Hintergrundbilder und -flaechen: ${decl}`);
+  }
+});
+
+test('HTML misst in pt - rem und em kennt Word nicht', () => {
+  const out = Exporter.html(sample, woche);
+  for (const decl of declarations(out)) {
+    assert.ok(!/\d\s*r?em\b/.test(decl), `relative Einheit in "${decl}"`);
+    // px bleibt der Linienstaerke vorbehalten, alles andere rechnet Word krumm
+    if (/\dpx/.test(decl)) assert.match(decl, /^border/, `px ausserhalb einer Linie: "${decl}"`);
+  }
+  assert.match(out, /font-size:11pt/);
+  assert.match(out, /padding:\d+(\.\d+)? \d+(\.\d+)? \d+(\.\d+)?pt/, 'Abstaende in pt');
+});
+
+test('HTML bringt Schrift und Zeilenhoehe an jeder Textzelle selbst mit', () => {
+  const out = Exporter.html(sample, woche);
+  const zellen = [...out.matchAll(/<td[^>]*style="([^"]*)"[^>]*>([^<]*)/g)];
+  let mitText = 0;
+  for (const [, stil, inhalt] of zellen) {
+    if (!inhalt.replace(/&nbsp;/g, '').trim()) continue;
+    mitText++;
+    assert.match(stil, /font-family:'Segoe UI',Calibri,Arial,sans-serif/, 'Word vererbt Schrift nicht in Zellen');
+    assert.match(stil, /line-height:\d+(\.\d+)?pt/, 'Zeilenhoehe absolut');
+    assert.match(stil, /mso-line-height-rule:exactly/, 'sonst zieht Word die Zeile auf');
+  }
+  assert.ok(mitText >= 5, `zu wenige Textzellen geprueft: ${mitText}`);
+});
+
+test('HTML faerbt keine Flaechen ein - wegen des Dunkelmodus', () => {
+  const out = Exporter.html(sample, woche);
+  assert.ok(!/bgcolor=/i.test(out), 'Outlook laesst gesetzte Flaechen im Dunkelmodus stehen');
+  assert.ok(!/background(-color)?\s*:/i.test(out));
+  assert.match(out, /<meta name="color-scheme" content="light dark">/);
+  assert.match(out, /<body style="margin:0;padding:12pt;">/, 'auch der Rumpf bleibt ungefaerbt');
+  // Zustand haengt nie allein an der Farbe
+  assert.match(out, /Erledigt \(1\)/);
+});
+
 test('HTML maskiert alles, was wie Markup aussieht', () => {
-  const boese = [{ ...sample[0], title: '<b>Skript</b> & "Anfuehrung"', notes: 'Zeile 1\nZeile 2' }];
+  const boese = [{ ...sample[0], title: '<b>Skript</b> & "Anfuehrung" \'einfach\'', notes: 'Zeile 1\nZeile 2' }];
   const out = Exporter.html(boese, [MONTAG], { fragment: true });
   assert.ok(!out.includes('<b>Skript</b>'));
-  assert.match(out, /&lt;b&gt;Skript&lt;\/b&gt; &amp; &quot;Anfuehrung&quot;/);
+  assert.match(out, /&lt;b&gt;Skript&lt;\/b&gt; &amp; &quot;Anfuehrung&quot; &#39;einfach&#39;/);
   assert.match(out, /Zeile 1<br>Zeile 2/);
-  assert.ok(!out.startsWith('<!doctype'), 'fragment: true liefert nur den Inhalt');
+  assert.strictEqual(out.split('<td').length - 1, out.split('</td>').length - 1, 'Zellen bleiben paarig');
+});
+
+test('HTML als Fragment ist genau das, was in die Zwischenablage gehoert', () => {
+  const out = Exporter.html(sample, woche, { fragment: true });
+  assert.ok(out.startsWith('<table '), 'kein <html>-Geruest');
+  assert.ok(out.endsWith('</table>'));
+  assert.ok(!out.includes('<!doctype'));
+  assert.ok(!out.includes('<meta'));
+});
+
+test('HTML: Uebertrag nur, wenn der Bericht ueber mehrere Tage geht', () => {
+  const woche_ = Exporter.html(sample, woche, { fragment: true });
+  assert.match(woche_, /Nimmt man mit \(2\)/);
+  assert.match(woche_, /\(Di 18\.08\..*Angebot|Angebot schreiben <span[^>]*>\(Di 18\.08\./, 'im Uebertrag steht der Tag');
+
+  const tag = Exporter.html(sample, [MONTAG], { fragment: true });
+  assert.ok(!tag.includes('Nimmt man mit'), 'an einem Tag stuende sonst alles doppelt');
+  assert.ok(!Exporter.html(sample, woche, { fragment: true, carry: false }).includes('Nimmt man mit'));
+});
+
+test('HTML kann Notizen weglassen und gruppiert wie Markdown', () => {
+  const ohne = Exporter.html(sample, woche, { fragment: true, notes: false });
+  assert.ok(!ohne.includes('Rueckruf bei Frau Meier'));
+
+  const quelle = Exporter.html(sample, woche, { fragment: true, groupBy: 'quelle' });
+  assert.match(quelle, /ServiceNow \/ Ticket/);
+  assert.match(quelle, /\(Mo 17\.08\./, 'ausserhalb der Tagesgruppierung steht der Tag am Eintrag');
+});
+
+test('HTML bleibt auch ohne Aufgaben gueltig', () => {
+  const leer = Exporter.html([], woche);
+  assert.match(leer, /Keine Einträge/);
+  assert.match(leer, /<table role="presentation"/);
+  assert.ok(!/<div/i.test(leer));
 });
 
 test('CSV hat Kopfzeile, BOM und maskiert Trennzeichen', () => {

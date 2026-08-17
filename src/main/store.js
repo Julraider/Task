@@ -22,6 +22,7 @@
  */
 
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 
 const Dates = require('../shared/dates');
@@ -30,6 +31,14 @@ const Model = require('../shared/model');
 const CURRENT_VERSION = 1;
 const SAVE_DEBOUNCE_MS = 400;
 const DEFAULT_KEEP_DAILY = 14;
+
+/**
+ * Wartezeiten fuer den zweiten, dritten, ... Versuch nach einem gescheiterten
+ * Schreibvorgang. Ohne diese Wiederholung bliebe ein Stand liegen, bis der
+ * Nutzer zufaellig noch etwas aendert - genau das passiert aber nicht, wenn
+ * das Netzlaufwerk waehrend der Mittagspause kurz weg ist.
+ */
+const RETRY_STEPS_MS = [5000, 15000, 60000, 300000];
 
 /** Wie viele Dateien je Sicherungsart aufgehoben werden. */
 const KEEP_OTHER = { sicherung: 12, konflikt: 8, defekt: 8, 'nicht-gespeichert': 8 };
@@ -121,19 +130,25 @@ function describeFsError(err) {
 class Store {
   /**
    * @param {string} filePath Pfad zur JSON-Datei
-   * @param {{keepDaily?: number, autoBackup?: boolean}} [options]
+   * @param {{keepDaily?: number, autoBackup?: boolean, fallbackDir?: string}} [options]
    */
   constructor(filePath, options = {}) {
     this.filePath = filePath;
     this.backupPath = filePath + '.bak';
     this.tmpPath = filePath + '.tmp';
     this.backupDir = path.join(path.dirname(filePath), 'backups');
+    // Letzter Ausweg, wenn der ganze Datenordner nicht erreichbar ist (Netz-
+    // laufwerk abgemeldet, USB-Stick gezogen): dann liegt der Stand wenigstens
+    // im lokalen Temp-Ordner statt nirgends.
+    this.fallbackDir = options.fallbackDir || path.join(os.tmpdir(), 'tagwerk-notablage');
 
     this.keepDaily = clampKeep(options.keepDaily);
     this.autoBackup = options.autoBackup !== false;
 
     this.data = emptyData();
     this._timer = null;
+    this._retryTimer = null;
+    this._retryStep = 0;
     this._listeners = new Set();
     this._statusListeners = new Set();
 
@@ -334,6 +349,37 @@ class Store {
     return this._saveNow();
   }
 
+  /**
+   * Nach einem gescheiterten Schreibvorgang von selbst noch einmal versuchen.
+   * Die Abstaende werden groesser, damit ein dauerhaft blockierter Ordner nicht
+   * im Sekundentakt Fehlermeldungen produziert.
+   */
+  _scheduleRetry() {
+    if (this._retryTimer || !this._dirty || this._state.readOnly) return;
+    const wait = RETRY_STEPS_MS[Math.min(this._retryStep, RETRY_STEPS_MS.length - 1)];
+    this._retryStep++;
+    this._retryTimer = setTimeout(() => {
+      this._retryTimer = null;
+      if (this._dirty) this._saveNow();
+    }, wait);
+    if (typeof this._retryTimer.unref === 'function') this._retryTimer.unref();
+  }
+
+  _clearRetry() {
+    if (this._retryTimer) clearTimeout(this._retryTimer);
+    this._retryTimer = null;
+    this._retryStep = 0;
+  }
+
+  /** Alle Zeitgeber abraeumen - fuer einen sauberen Abschied beim Beenden. */
+  dispose() {
+    if (this._timer) clearTimeout(this._timer);
+    this._timer = null;
+    this._clearRetry();
+    this._listeners.clear();
+    this._statusListeners.clear();
+  }
+
   _saveNow() {
     if (this._timer) {
       clearTimeout(this._timer);
@@ -356,6 +402,7 @@ class Store {
       this._mainTrusted = true;
       this._lastWrite = this._statOf(this.filePath);
       this._state.lastSaveAt = nowIso();
+      this._clearRetry();
       if (this._state.lastError) {
         // Es klappt wieder - die alte Fehlermeldung darf weg
         this._state.lastError = null;
@@ -374,6 +421,9 @@ class Store {
         `Die Daten konnten nicht gespeichert werden: ${describeFsError(err)} Die Eingaben von heute stehen noch im Fenster – bitte exportieren, bevor Tagwerk beendet wird.`
       );
       this._rescue();
+      // Ein Netzlaufwerk kommt oft von selbst wieder; ohne diesen Versuch bliebe
+      // der Stand bis zur naechsten Nutzereingabe ungeschrieben liegen.
+      this._scheduleRetry();
       return false;
     }
   }
@@ -429,20 +479,31 @@ class Store {
    */
   _rescue() {
     if (!this._dirty) return false;
-    try {
-      fs.mkdirSync(this.backupDir, { recursive: true });
-      if (!this._rescueFile) this._rescueFile = path.join(this.backupDir, `nicht-gespeichert-${stamp()}.json`);
-      writeDurable(this._rescueFile, JSON.stringify(this.data, null, 2));
-      this._problem(
-        'notablage',
-        'warn',
-        `Die Änderungen liegen als „${path.basename(this._rescueFile)}" im Ordner „backups".`
-      );
-      return false;
-    } catch (err) {
-      console.error('[store] Auch die Notablage schlug fehl:', err.message);
-      return false;
+    const json = JSON.stringify(this.data, null, 2);
+
+    // Erst in den Sicherungsordner. Ist der ganze Datenordner weg (Netzlaufwerk
+    // abgemeldet), hilft nur noch ein Ort, den es garantiert gibt.
+    for (const dir of [this.backupDir, this.fallbackDir]) {
+      try {
+        fs.mkdirSync(dir, { recursive: true });
+        if (!this._rescueFile || path.dirname(this._rescueFile) !== dir) {
+          this._rescueFile = path.join(dir, `nicht-gespeichert-${stamp()}.json`);
+        }
+        writeDurable(this._rescueFile, json);
+        this._problem(
+          'notablage',
+          'warn',
+          dir === this.backupDir
+            ? `Die Änderungen liegen als „${path.basename(this._rescueFile)}" im Ordner „backups".`
+            : `Der Datenordner ist nicht erreichbar. Die Änderungen liegen als „${this._rescueFile}".`
+        );
+        return false;
+      } catch (err) {
+        console.error('[store] Notablage in', dir, 'schlug fehl:', err.message);
+      }
     }
+    this._rescueFile = null;
+    return false;
   }
 
   // ------------------------------------------------------------ Sicherungen
@@ -562,7 +623,17 @@ class Store {
   }
 
   setKeepDaily(days) {
+    const before = this.keepDaily;
     this.keepDaily = clampKeep(days);
+    // Eine kleinere Zahl muss sofort wirken, sonst wundert sich der Nutzer,
+    // warum im Ordner weiter 14 Tagessicherungen liegen.
+    if (this.keepDaily < before) {
+      try {
+        this._prune();
+      } catch (err) {
+        console.warn('[store] Aufraeumen der Sicherungen fehlgeschlagen:', err.message);
+      }
+    }
     return this.keepDaily;
   }
 
@@ -615,6 +686,8 @@ class Store {
       lastSaveAt: this._state.lastSaveAt,
       lastError: this._state.lastError,
       pendingChanges: this._dirty,
+      // true = ein Schreibvorgang ist gescheitert, ein weiterer Versuch laeuft
+      retrying: !!this._retryTimer,
       rescueFile: this._rescueFile,
       keepDaily: this.keepDaily,
       problems: [...this._problems.values()],

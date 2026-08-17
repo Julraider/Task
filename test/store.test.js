@@ -536,3 +536,29 @@ test('gebuendeltes Speichern schreibt erst beim flush', () => {
   settings.flush();
   assert.ok(fs.existsSync(file));
 });
+
+// ------------------------------------------------------------------ Export
+
+test('was der Store liefert, laesst sich in jedem Format exportieren', () => {
+  // Bindeglied zwischen Persistenz und Export: der Store zieht Felder gerade,
+  // der Export darf daraus nirgends 'undefined' oder 'Invalid Date' machen.
+  const Exporter = require('../src/shared/export');
+  const { store } = tmpStore();
+  store.add({ ...base, title: 'Switch tauschen', tags: ['netzwerk'] });
+  const done = store.add({ ...base, title: 'INC0012345 <pruefen>', source: 'ticket', notes: 'Zeile 1\nZeile 2' });
+  store.update(done.id, { status: 'erledigt' });
+  store.add({ title: 'Ohne alles' }); // Tag, Quelle und Status kommen vom Store
+
+  const items = store.snapshot().items;
+  for (const format of Exporter.FORMATS) {
+    const out = Exporter.build(format.id, items, null, {});
+    assert.ok(out.length > 0, `${format.id} liefert nichts`);
+    for (const muell of ['Invalid Date', 'undefined', 'NaN']) {
+      assert.ok(!out.includes(muell), `${format.id} enthaelt '${muell}'`);
+    }
+  }
+
+  const html = Exporter.build('html', items, null, {});
+  assert.ok(!/<div|<ul|<li[ >]/i.test(html), 'HTML bleibt ein Tabellen-Layout fuer Outlook');
+  assert.ok(!html.includes('<pruefen>'), 'Titel werden maskiert');
+});

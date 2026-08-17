@@ -10,6 +10,12 @@
 
 const { contextBridge, ipcRenderer } = require('electron');
 
+// Mehrere Renderer-Module hoeren auf dieselben Kanaele (Daten, Status, Thema,
+// Tageswechsel). Ohne diese Zeile warnt Node ab dem elften Zuhoerer in der
+// Konsole des Renderers - eine Warnung, die nach einem Leck aussieht, aber
+// keins ist.
+ipcRenderer.setMaxListeners(0);
+
 /** Event-Listener registrieren und eine Abmeldefunktion zurueckgeben. */
 function on(channel, callback) {
   const listener = (_event, payload) => callback(payload);
@@ -53,6 +59,21 @@ const api = {
 
   getTheme: () => ipcRenderer.invoke('theme:get'),
   onThemeChanged: (cb) => on('theme:changed', cb),
+
+  // --- Tageswechsel --------------------------------------------------------
+  // Die App laeuft nachts durch: um Mitternacht (und nach dem Aufwachen aus dem
+  // Ruhezustand) meldet der Main-Prozess den neuen Tag. Wer 'heute' anzeigt,
+  // muss darauf hoeren - sonst steht morgens noch der gestrige Tag im Fenster.
+  /** @returns {Promise<{ok: boolean, today: string}>} */
+  getToday: () => ipcRenderer.invoke('day:get'),
+  /** cb({ today: 'YYYY-MM-DD', previous: 'YYYY-MM-DD'|null, reason: string }) */
+  onDayChanged: (cb) => on('day:changed', cb),
+
+  // --- Zoomstufe -----------------------------------------------------------
+  // Wird gemerkt und beim naechsten Start wiederhergestellt.
+  getZoom: () => ipcRenderer.invoke('zoom:get'),
+  setZoom: (level) => ipcRenderer.invoke('zoom:set', { level }),
+  onZoomChanged: (cb) => on('zoom:changed', cb),
 
   // --- Export / Import -----------------------------------------------------
   // `html` ist optional: nur damit landet ein Bericht formatiert in einer

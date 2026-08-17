@@ -26,9 +26,7 @@ const asObject = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {
 const asText = (v) => (typeof v === 'string' ? v : '');
 const asId = (v) => (typeof v === 'string' && v.length > 0 && v.length <= 200 ? v : null);
 const asIds = (v) => (Array.isArray(v) ? v.filter((id) => asId(id)) : []).slice(0, 5000);
-const asList = (v) => (Array.isArray(v) ? v : []);
-
-const FORMATS = { md: 'md', csv: 'csv', json: 'json' };
+const asList = (v) => (Array.isArray(v) ? v.slice(0, 5000) : []);
 
 function registerIpc({ store, settings, api }) {
   /** Kleiner Wrapper: Fehler landen nie als unhandled rejection im Renderer. */
@@ -131,6 +129,9 @@ function registerIpc({ store, settings, api }) {
   handle('settings:set', (patch) => {
     const before = settings.get();
     const next = settings.set(patch);
+    // Sofort sichern: die Folgeaufrufe unten setzen ihrerseits Einstellungen
+    // und wuerden die Liste der verworfenen Werte ueberschreiben.
+    const rejected = [...(settings.lastRejected || [])];
 
     if (patch.theme && next.theme !== before.theme) api.applyTheme(next.theme);
     if (next.backupKeepDays !== before.backupKeepDays) store.setKeepDaily(next.backupKeepDays);
@@ -149,12 +150,42 @@ function registerIpc({ store, settings, api }) {
       if (launch && launch.enabled !== next.launchAtLogin) settings.set({ launchAtLogin: launch.enabled });
     }
 
+    if (patch.zoom !== undefined && next.zoom !== before.zoom) api.setZoom(next.zoom);
+
     const current = settings.get();
     api.broadcast('settings:changed', current);
-    return { ok: true, settings: current, shortcut, launch };
+    // `rejected` nennt die Schluessel, deren Wert die Pruefung nicht bestanden
+    // hat - die Oberflaeche kann den alten Wert wieder anzeigen und es sagen,
+    // statt so zu tun, als waere die Einstellung uebernommen.
+    return { ok: true, settings: current, shortcut, launch, rejected };
   });
 
   handle('theme:get', () => ({ ok: true, theme: api.currentTheme() }));
+
+  // ------------------------------------------------------------ Tageswechsel
+
+  /**
+   * Auf welchem Tag steht die App gerade? Der Renderer rechnet zwar selbst mit
+   * Dates.todayKey(), soll sich aber nach langem Ruhezustand am Main-Prozess
+   * ausrichten koennen - der prueft den Tageswechsel aktiv und meldet ihn ueber
+   * 'day:changed'.
+   */
+  handle('day:get', () => {
+    api.checkDayChange('abfrage');
+    return { ok: true, today: api.today() };
+  });
+
+  // -------------------------------------------------------------------- Zoom
+
+  handle('zoom:get', () => ({ ok: true, zoom: api.currentZoom() }));
+
+  /** { level: -3 .. 3 } - halbe Schritte, alles andere wird gerundet/begrenzt. */
+  handle('zoom:set', ({ level }) => {
+    const n = Number(level);
+    if (!Number.isFinite(n)) return { ok: false, error: 'Ungültige Zoomstufe.' };
+    api.setZoom(n);
+    return { ok: true, zoom: api.currentZoom() };
+  });
 
   // ------------------------------------------------------------------ Status
 

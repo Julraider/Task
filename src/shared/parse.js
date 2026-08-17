@@ -10,7 +10,8 @@
  *
  *   @quelle   Quelle (teams, mail, ticket, jira, muendlich, telefon, meeting, ...)
  *             Praefixe und kleine Tippfehler werden verziehen: @outlok -> mail
- *   #tag      beliebig viele Tags
+ *   #tag      beliebig viele Tags (mindestens ein Buchstabe, sonst bleibt es
+ *             Titel: '#4711' ist eine Nummer, kein Schlagwort)
  *   !  / !!   Prioritaet hoch / dringend
  *   >tag      Zieltag, auch mehrwortig:
  *             heute, morgen, uebermorgen, gestern, mo..so, +3, -1, +2w,
@@ -350,8 +351,13 @@
 
       if (token.startsWith('#') && token.length > 1) {
         const tag = token.slice(1).toLowerCase().replace(/[^\p{L}\p{N}_-]/gu, '');
-        if (tag && !result.tags.includes(tag)) result.tags.push(tag);
-        continue;
+        // Ein Schlagwort braucht mindestens einen Buchstaben. Sonst wuerde
+        // 'Rechnung #4711 pruefen' die Nummer als Tag schlucken und '#!!'
+        // spurlos verschwinden - beides waere ein Fehlalarm.
+        if (/\p{L}/u.test(tag)) {
+          if (!result.tags.includes(tag)) result.tags.push(tag);
+          continue;
+        }
       }
 
       if (/^!{1,3}$/.test(token)) {

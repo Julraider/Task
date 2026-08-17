@@ -26,10 +26,63 @@ const DEFAULTS = {
   launchAtLogin: false,
   confirmDelete: false,
   backupKeepDays: 14, // Tagessicherungen, die aufgehoben werden
+  zoom: 0, // Zoomstufe des Hauptfensters (Electron-Skala, 0 = 100 %)
   window: { width: 1080, height: 760, x: null, y: null, maximized: false },
 };
 
 const bool = (v) => (typeof v === 'boolean' ? v : undefined);
+
+/** Erlaubte Vorsatztasten eines Tastenkuerzels (Schreibweise egal). */
+const MODIFIERS = new Set([
+  'command', 'cmd', 'control', 'ctrl', 'commandorcontrol', 'cmdorctrl',
+  'alt', 'option', 'altgr', 'shift', 'super', 'meta',
+]);
+
+/** Tasten mit Namen; einzelne Zeichen (a, 7, ,) sind zusaetzlich erlaubt. */
+const NAMED_KEYS = new Set([
+  'space', 'tab', 'capslock', 'numlock', 'scrolllock', 'backspace', 'delete', 'insert',
+  'return', 'enter', 'up', 'down', 'left', 'right', 'home', 'end', 'pageup', 'pagedown',
+  'escape', 'esc', 'plus', 'printscreen',
+  'volumeup', 'volumedown', 'volumemute', 'medianexttrack', 'mediaprevioustrack',
+  'mediastop', 'mediaplaypause',
+  'numdec', 'numadd', 'numsub', 'nummult', 'numdiv',
+]);
+
+/**
+ * Ein globales Tastenkuerzel muss mindestens eine Vorsatztaste haben - sonst
+ * loest jedes „t" in jedem anderen Programm die Schnellerfassung aus. Unsinn
+ * wird hier abgefangen und nicht erst von globalShortcut.register, wo er nur
+ * als stiller Fehlschlag ankaeme.
+ */
+function accelerator(v) {
+  if (typeof v !== 'string') return undefined;
+  const text = v.trim();
+  if (!text || text.length > 100) return undefined;
+
+  const parts = text.split('+').map((p) => p.trim()).filter(Boolean);
+  if (parts.length < 2) return undefined;
+
+  const key = String(parts.pop()).toLowerCase();
+  if (!parts.every((p) => MODIFIERS.has(p.toLowerCase()))) return undefined;
+
+  const known =
+    (key.length === 1 && key !== ' ') ||
+    /^f([1-9]|1\d|2[0-4])$/.test(key) ||
+    /^num[0-9]$/.test(key) ||
+    NAMED_KEYS.has(key);
+  return known ? text : undefined;
+}
+
+/**
+ * Zoomstufe wie in Electron: 0 = 100 %, jede Stufe etwa 20 %. Auf halbe
+ * Schritte gerundet, damit der gespeicherte Wert zu dem passt, was die
+ * Menuebefehle „Groesser"/„Kleiner" erzeugen.
+ */
+function zoomLevel(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return undefined;
+  return Math.max(-3, Math.min(3, Math.round(n * 2) / 2));
+}
 
 function int(min, max) {
   return (v) => {
@@ -53,13 +106,14 @@ function coord(v) {
  */
 const CHECKS = {
   theme: (v) => (['system', 'light', 'dark'].includes(v) ? v : undefined),
-  globalShortcut: (v) => (typeof v === 'string' && v.length <= 100 ? v.trim() : undefined),
+  globalShortcut: accelerator,
   globalShortcutEnabled: bool,
   showWeekend: bool,
   closeToTray: bool,
   launchAtLogin: bool,
   confirmDelete: bool,
   backupKeepDays: int(1, 365),
+  zoom: zoomLevel,
 };
 
 function sanitizeWindow(win, current) {
@@ -90,6 +144,9 @@ class Settings {
     this._timer = null;
     this._dirty = false;
     this.lastError = null;
+    /** Schluessel, die beim letzten set() verworfen wurden - die Oberflaeche
+     *  soll den abgelehnten Wert nicht stillschweigend weiter anzeigen. */
+    this.lastRejected = [];
   }
 
   load() {
@@ -162,6 +219,7 @@ class Settings {
   set(patch) {
     const src = patch && typeof patch === 'object' && !Array.isArray(patch) ? patch : {};
     const next = { ...this.values };
+    const rejected = [];
 
     for (const [key, value] of Object.entries(src)) {
       if (key === 'window') {
@@ -172,6 +230,7 @@ class Settings {
         const clean = CHECKS[key](value);
         if (clean === undefined) {
           console.warn(`[settings] Wert fuer "${key}" verworfen:`, value);
+          rejected.push(key);
           continue;
         }
         next[key] = clean;
@@ -181,17 +240,27 @@ class Settings {
       // schreiben laesst - sonst blockiert ein einziger Zirkelbezug das Speichern.
       const clean = jsonSafe(value, 4);
       if (clean !== undefined) next[key] = clean;
+      else rejected.push(key);
     }
 
     this.values = next;
+    this.lastRejected = rejected;
     this.save();
     return this.values;
   }
 
   reset() {
     this.values = defaults();
+    this.lastRejected = [];
     this.save();
     return this.values;
+  }
+
+  /** Zeitgeber abraeumen; der ausstehende Stand wird vorher noch geschrieben. */
+  dispose() {
+    this.flush();
+    if (this._timer) clearTimeout(this._timer);
+    this._timer = null;
   }
 }
 

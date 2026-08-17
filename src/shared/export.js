@@ -3,7 +3,9 @@
  *
  * Aus denselben Aufgaben entstehen hier
  *   - Markdown  fuer den Tages-, Wochen- oder Zeitraumbericht,
- *   - HTML      zum Einfuegen in eine Outlook-Mail (Outlook kann kein Markdown),
+ *   - HTML      zum Einfuegen in eine Outlook-Mail (Outlook kann kein Markdown;
+ *               fuer die Zwischenablage `fragment: true`, siehe die Regeln im
+ *               Abschnitt HTML - Outlook rendert mit der Word-Engine),
  *   - Standup   als kurze Liste fuer die Morgenrunde,
  *   - CSV       fuer Excel (Semikolon, BOM, CRLF),
  *   - JSON      als Sicherung.
@@ -193,7 +195,10 @@
 
   function metaBits(item, withDay) {
     const bits = [];
-    if (withDay) bits.push(`${Dates.shortWeekday(item.day)} ${Dates.formatShort(item.day)}`);
+    // Ohne gueltigen Tag lieber gar keine Angabe als ein 'undefined Invalid Date'
+    if (withDay && Dates.isValidKey(item.day)) {
+      bits.push(`${Dates.shortWeekday(item.day)} ${Dates.formatShort(item.day)}`);
+    }
     const src = Model.sourceById(item.source);
     if (src) bits.push(src.label);
     if (item.ref) bits.push(item.ref);
@@ -393,90 +398,232 @@
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 
-  const CSS = {
-    page: "margin:0;padding:0;font-family:'Segoe UI',Calibri,Arial,sans-serif;font-size:11pt;color:#22272b;line-height:1.45",
-    h1: 'margin:0 0 4px;font-size:15pt;font-weight:600',
-    sub: 'margin:0 0 12px;font-size:10pt;color:#5b6470',
-    group: 'margin:18px 0 6px;font-size:12pt;font-weight:600;border-bottom:1px solid #dfe3e8;padding-bottom:3px',
-    part: 'margin:10px 0 4px;font-size:10pt;font-weight:600;color:#5b6470',
-    list: 'margin:0;padding:0 0 0 20px',
-    item: 'margin:0 0 5px',
-    meta: 'color:#5b6470;font-size:9.5pt',
-    note: 'margin:2px 0 0;color:#5b6470;font-size:9.5pt',
-    done: 'color:#2f7a4d;font-weight:600',
-    open: 'color:#8a929c;font-weight:600',
+  /*
+   * Warum der HTML-Export so gebaut ist, wie er gebaut ist
+   * -----------------------------------------------------
+   * Der Bericht ist zum Einfuegen in eine Outlook-Mail gedacht. Outlook fuer
+   * Windows stellt Mails aber nicht mit einer Browser-Engine dar, sondern mit
+   * der von Word (seit Outlook 2007). Word kennt nur einen kleinen Ausschnitt
+   * von CSS - daraus ergeben sich die folgenden Regeln. Sie sehen umstaendlich
+   * aus; wer sie "vereinfacht", zerlegt den Bericht in Outlook:
+   *
+   *  1. Layout ausschliesslich mit <table>. float, position, max-width,
+   *     display:flex und grid ignoriert Word vollstaendig.
+   *  2. Abstaende ausschliesslich als `padding` an <td>. margin und padding an
+   *     <div> wirft Word weg - deshalb gibt es hier keine <div>-Huelle mehr.
+   *  3. Jede Tabelle bekommt cellpadding/cellspacing/border="0",
+   *     border-collapse:collapse und mso-table-lspace/-rspace:0pt. Ohne das
+   *     Letzte setzt Word von sich aus ~7,5pt Luft links und rechts.
+   *  4. Alle Masse in pt. Word rechnet intern in Punkt und rundet px krumm
+   *     (14px sind 10,5pt und landen als "11" oder gar nichts). rem und em
+   *     kennt Word nicht. Einzige Ausnahme: Linienstaerken in px - eine
+   *     duennere Linie als 1px gibt es ohnehin nicht.
+   *  5. line-height absolut in pt und zusammen mit mso-line-height-rule:exactly.
+   *     Ohne die Regel zieht Word die Zeile am hoechsten Zeichen auf, mit
+   *     krummen Faktoren (1.45) rechnet es gar nicht erst.
+   *  6. Schriftangaben an *jeder* Zelle wiederholen: Word vererbt Schrift und
+   *     Farbe nicht zuverlaessig in Tabellenzellen hinein.
+   *  7. Keine Webfonts. <link> und @font-face ueberleben den Weg in die Mail
+   *     nicht; genommen wird, was mit Windows/Office ohnehin da ist.
+   *  8. Keine Flaechenfarben (kein bgcolor, kein background-color). Outlook
+   *     faerbt im Dunkelmodus selbst um: Textfarben dreht es, gesetzte
+   *     Hintergruende bleiben je nach Version stehen - helle Flaeche plus
+   *     aufgehellter Text ist dann unlesbar. Ohne Hintergrund gewinnt immer
+   *     die Farbe des Mail-Fensters. Aus demselben Grund sind Linien und
+   *     Nebentexte Mitteltoene: die stehen auf Weiss wie auf Dunkel.
+   *  9. Keine <ul>/<li>. Word ignoriert margin/padding an <ul> und setzt seine
+   *     eigene Einrueckung (mso-list); Haken und Text stehen deshalb in zwei
+   *     Tabellenspalten.
+   * 10. Alles inline. <style>-Bloecke, Klassen und @media-Abfragen ueberleben
+   *     weder Word noch den Weg ueber die Zwischenablage.
+   * 11. Zustand steht nie nur in der Farbe: neben dem gruenen Haken steht
+   *     immer auch die Ueberschrift "Erledigt". Im Dunkelmodus verschiebt
+   *     Outlook Farben, Woerter bleiben Woerter.
+   */
+
+  /** Schriftstapel ohne Webfonts - kommt so mit Windows/Office. */
+  const FONT = "'Segoe UI',Calibri,Arial,sans-serif";
+
+  const COLOR = {
+    text: '#22272b', // fast schwarz: Outlook dreht das im Dunkelmodus sauber nach fast weiss
+    muted: '#5b6470', // Nebentext, noch dunkel genug fuer Weiss
+    line: '#9aa3ad', // Mittelton: sichtbar auf hellem *und* auf dunklem Grund
+    done: '#2f7a4d', // Mitteltoene, damit der Dunkelmodus sie nicht wegdreht
+    open: '#8a929c',
   };
 
-  function htmlItem(item, withDay) {
-    const isDone = item.status === 'erledigt';
-    const box = `<span style="${isDone ? CSS.done : CSS.open}">${isDone ? '&#10003;' : '&#9633;'}</span>`;
-    const info = metaBits(item, withDay).join(' · ');
-    let out = `<li style="${CSS.item}">${box} ${esc(item.title)}`;
-    if (info) out += ` <span style="${CSS.meta}">(${esc(info)})</span>`;
-    const notes = String(item.notes || '').trim();
-    if (notes) {
-      out += `<div style="${CSS.note}">${esc(notes).replace(/\r?\n/g, '<br>')}</div>`;
-    }
-    return out + '</li>';
-  }
+  /** Attribute, die Word an jeder Tabelle sehen will. */
+  const TABLE_ATTR = 'role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"';
+  const TABLE_STYLE = 'width:100%;border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt';
 
-  function htmlPart(title, items, withDay) {
-    if (!items.length) return '';
+  /** Spaltenbreite fuer die Haken-Spalte: 14pt entsprechen den 19px im Attribut. */
+  const MARK_ATTR = 'width="19"';
+  const MARK_WIDTH = 'width:14pt;';
+
+  /**
+   * Grundstil einer Textzelle. Wird bewusst an jeder Zelle wiederholt (Regel 6)
+   * und bringt die Zeilenhoehe absolut mit (Regel 5).
+   */
+  function cellFont(size, lead, color, bold) {
     return (
-      `<div style="${CSS.part}">${esc(title)} (${items.length})</div>` +
-      `<ul style="${CSS.list}">` +
-      items.map((i) => htmlItem(i, withDay)).join('') +
-      '</ul>'
+      `font-family:${FONT};font-size:${size}pt;` +
+      `line-height:${lead}pt;mso-line-height-rule:exactly;` +
+      `color:${color};` +
+      (bold ? 'font-weight:bold;' : '')
     );
   }
 
+  function table(rows) {
+    return `<table ${TABLE_ATTR} style="${TABLE_STYLE}"><tbody>${rows}</tbody></table>`;
+  }
+
+  /** Eine Zeile mit genau einer Zelle ueber die volle Breite. */
+  function fullRow(style, inner) {
+    return `<tr><td style="${style}">${inner}</td></tr>`;
+  }
+
+  function htmlTitle(text) {
+    return fullRow(cellFont(15, 20, COLOR.text, true) + 'padding:0 0 3pt;', esc(text));
+  }
+
+  function htmlSub(text) {
+    return fullRow(cellFont(9.5, 13, COLOR.muted) + 'padding:0 0 6pt;', esc(text));
+  }
+
   /**
-   * HTML-Bericht - gedacht zum Kopieren in eine Outlook-Mail.
-   * Alle Formatierungen stehen bewusst inline: Outlook wirft <style>-Bloecke weg.
-   * @param {{title?, subtitle?, groupBy?, fragment?}} [options]
-   *        fragment: true liefert nur den Inhalt ohne <html>-Geruest.
+   * Gruppen-Ueberschrift. Die Trennlinie sitzt als border-bottom an der Zelle -
+   * an einem <div> wuerde Word sie ignorieren.
+   */
+  function htmlGroupHead(text) {
+    return fullRow(
+      cellFont(12, 16, COLOR.text, true) +
+        `padding:12pt 0 3pt;border-bottom:1px solid ${COLOR.line};`,
+      esc(text)
+    );
+  }
+
+  function htmlPartHead(text, count) {
+    return fullRow(cellFont(9.5, 13, COLOR.muted, true) + 'padding:8pt 0 3pt;', `${esc(text)} (${count})`);
+  }
+
+  /**
+   * Eine Aufgabe als zwei Zellen: Haken/Kaestchen und Text. Notizen bekommen
+   * eine eigene Zeile mit leerer Marken-Zelle - eingerueckt wird ueber die
+   * Spalte, nicht ueber margin.
+   */
+  function htmlItemRows(item, withDay, withNotes) {
+    const isDone = item.status === 'erledigt';
+    const markStyle =
+      cellFont(11, 16, isDone ? COLOR.done : COLOR.open, true) + MARK_WIDTH + 'padding:0 5pt 2pt 0;';
+    const textStyle = cellFont(11, 16, COLOR.text) + 'padding:0 0 2pt;';
+
+    const info = metaBits(item, withDay).join(' · ');
+    const meta = info
+      ? ` <span style="font-family:${FONT};font-size:9.5pt;color:${COLOR.muted};">(${esc(info)})</span>`
+      : '';
+
+    let out =
+      '<tr>' +
+      `<td ${MARK_ATTR} valign="top" style="${markStyle}">${isDone ? '&#10003;' : '&#9633;'}</td>` +
+      `<td valign="top" style="${textStyle}">${esc(item.title)}${meta}</td>` +
+      '</tr>';
+
+    const notes = withNotes === false ? '' : String(item.notes || '').trim();
+    if (notes) {
+      // Leere Zellen laesst Word einfallen - deshalb ein &nbsp; als Fuellung.
+      out +=
+        '<tr>' +
+        `<td ${MARK_ATTR} style="${cellFont(9.5, 13, COLOR.muted) + MARK_WIDTH}">&nbsp;</td>` +
+        `<td style="${cellFont(9.5, 13, COLOR.muted)}padding:0 0 3pt;">` +
+        esc(notes).replace(/\r?\n/g, '<br>') +
+        '</td></tr>';
+    }
+    return out;
+  }
+
+  /** Die Aufgaben eines Abschnitts als eigene Tabelle in einer Zeile. */
+  function htmlItemTable(items, withDay, withNotes) {
+    return fullRow('padding:0;', table(items.map((i) => htmlItemRows(i, withDay, withNotes)).join('')));
+  }
+
+  /** 'Erledigt (3)' samt Aufgabentabelle. Leere Abschnitte fallen weg. */
+  function htmlPart(title, items, withDay, withNotes) {
+    if (!items.length) return '';
+    return htmlPartHead(title, items.length) + htmlItemTable(items, withDay, withNotes);
+  }
+
+  /**
+   * HTML-Bericht - gedacht zum Einfuegen in eine Outlook-Mail.
+   * Aufbau und Begruendung stehen im Kommentarblock weiter oben.
+   * @param {{title?, subtitle?, groupBy?, notes?, carry?, fragment?}} [options]
+   *        notes: false laesst die Notizen weg,
+   *        carry: false den Uebertrag am Ende (nur bei mehreren Tagen),
+   *        fragment: true liefert nur die Tabelle ohne <html>-Geruest -
+   *        genau das gehoert in die Zwischenablage.
    */
   function html(items, dayKeys, options) {
     const opts = options || {};
     const inRange = selectItems(items, dayKeys);
     const groupBy = opts.groupBy || 'tag';
     const showDay = groupBy !== 'tag';
-    const title = opts.title || autoTitle(resolveKeys(inRange, dayKeys));
+    const keys = resolveKeys(inRange, dayKeys);
+    const title = opts.title || autoTitle(keys);
 
-    let out = `<div style="${CSS.page}">`;
-    out += `<h1 style="${CSS.h1}">${esc(title)}</h1>`;
-    if (opts.subtitle) out += `<p style="${CSS.sub}">${esc(opts.subtitle)}</p>`;
+    let rows = htmlTitle(title);
+    if (opts.subtitle) rows += htmlSub(opts.subtitle);
 
     if (!inRange.length) {
-      out += `<p style="${CSS.sub}">Keine Einträge.</p></div>`;
-      return opts.fragment ? out : htmlDocument(title, out);
+      rows += htmlSub('Keine Einträge.');
+      return finishHtml(title, table(rows), opts);
     }
 
     const sum = summarize(inRange);
     const numbers = [`${inRange.length} ${inRange.length === 1 ? 'Aufgabe' : 'Aufgaben'}`, statusSummary(sum)];
     const sources = topList(sum.sources, 'Quellen', 4);
     if (sources) numbers.push(sources);
-    out += `<p style="${CSS.sub}">${esc(numbers.join(' · '))}</p>`;
+    rows += htmlSub(numbers.join(' · '));
 
     for (const group of groupItems(inRange, dayKeys, groupBy)) {
-      out += `<div style="${CSS.group}">${esc(group.title)}</div>`;
+      rows += htmlGroupHead(group.title);
       const { done, open, waiting } = splitByStatus(group.items);
-      out += htmlPart('Erledigt', done, showDay);
-      out += htmlPart('Offen', open, showDay);
-      out += htmlPart('Wartet', waiting, showDay);
+      rows += htmlPart('Erledigt', done, showDay, opts.notes);
+      rows += htmlPart('Offen', open, showDay, opts.notes);
+      rows += htmlPart('Wartet', waiting, showDay, opts.notes);
     }
 
-    out += '</div>';
-    return opts.fragment ? out : htmlDocument(title, out);
+    // Uebertrag wie im Markdown-Bericht - aber nur, wenn der Bericht ueber
+    // mehrere Tage geht; bei einem einzelnen Tag stuende alles doppelt da.
+    if (opts.carry !== false && keys.length > 1) {
+      const carry = sortItems(inRange.filter((i) => i.status !== 'erledigt'));
+      if (carry.length) {
+        rows += htmlGroupHead(`Nimmt man mit (${carry.length})`);
+        rows += htmlItemTable(carry, true, false);
+      }
+    }
+
+    return finishHtml(title, table(rows), opts);
   }
 
+  function finishHtml(title, inner, opts) {
+    return opts.fragment ? inner : htmlDocument(title, inner);
+  }
+
+  /**
+   * Geruest fuer den Export in eine Datei. Beim Einfuegen in Outlook zaehlt
+   * ohnehin nur die Tabelle; die beiden color-scheme-Angaben sagen den
+   * Clients, dass der Bericht in hell wie dunkel funktioniert - deshalb faerbt
+   * <body> hier auch nichts ein (siehe Regel 8).
+   */
   function htmlDocument(title, inner) {
     return (
       '<!doctype html>\n<html lang="de">\n<head>\n<meta charset="utf-8">\n' +
-      `<title>${esc(title)}</title>\n</head>\n<body style="margin:0;padding:20px;background:#ffffff">\n` +
+      '<meta name="color-scheme" content="light dark">\n' +
+      '<meta name="supported-color-schemes" content="light dark">\n' +
+      `<title>${esc(title)}</title>\n</head>\n<body style="margin:0;padding:12pt;">\n` +
       inner +
       '\n</body>\n</html>\n'
     );
