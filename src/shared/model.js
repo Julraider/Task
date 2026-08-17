@@ -27,9 +27,12 @@
     { id: 'teams', label: 'Teams', icon: '💬', aliases: ['teams', 'chat', 'ms'] },
     { id: 'mail', label: 'Outlook / Mail', icon: '✉️', aliases: ['mail', 'outlook', 'email', 'mailbox'] },
     { id: 'ticket', label: 'ServiceNow / Ticket', icon: '🎫', aliases: ['ticket', 'servicenow', 'snow', 'sn', 'inc'] },
+    { id: 'jira', label: 'Jira / Projekt', icon: '🧩', aliases: ['jira', 'issue', 'backlog', 'sprint', 'story'] },
     { id: 'muendlich', label: 'Mündlich', icon: '🗣️', aliases: ['muendlich', 'mündlich', 'zuruf', 'flur', 'tuer', 'tür'] },
     { id: 'telefon', label: 'Telefon', icon: '☎️', aliases: ['telefon', 'anruf', 'call', 'phone'] },
     { id: 'meeting', label: 'Meeting', icon: '📅', aliases: ['meeting', 'termin', 'besprechung', 'jourfixe', 'jf'] },
+    { id: 'vorort', label: 'Vor Ort', icon: '🚶', aliases: ['vorort', 'vor-ort', 'onsite', 'begehung', 'werkstatt', 'baustelle'] },
+    { id: 'wiki', label: 'Wiki / Doku', icon: '📚', aliases: ['wiki', 'doku', 'dokumentation', 'confluence', 'sharepoint'] },
     { id: 'selbst', label: 'Eigene Notiz', icon: '📝', aliases: ['selbst', 'eigen', 'idee', 'ich', 'me'] },
     { id: 'sonstiges', label: 'Sonstiges', icon: '📌', aliases: ['sonstiges', 'sonst', 'misc', 'other'] },
   ];
@@ -78,13 +81,30 @@
     return STATUS_CYCLE[(i + 1) % STATUS_CYCLE.length];
   }
 
-  /** Vergleichsfunktion fuer die Anzeige einer Tagesliste. */
+  /**
+   * Vergleichsfunktion fuer die Anzeige einer Tagesliste:
+   * Status (aktiv, offen, wartet, erledigt), dann Prioritaet, dann Alter.
+   * Erledigtes wird nach dem Zeitpunkt des Abhakens sortiert - so liest sich
+   * ein Tagesbericht wie der Tagesablauf.
+   */
   function compareItems(a, b) {
     const sa = STATUS_ORDER[a.status] ?? 9;
     const sb = STATUS_ORDER[b.status] ?? 9;
     if (sa !== sb) return sa - sb;
+    if (a.status === 'erledigt' && b.status === 'erledigt' && a.doneAt && b.doneAt) {
+      const byDone = String(a.doneAt).localeCompare(String(b.doneAt));
+      if (byDone) return byDone;
+    }
     if ((b.priority || 0) !== (a.priority || 0)) return (b.priority || 0) - (a.priority || 0);
-    return String(a.createdAt).localeCompare(String(b.createdAt));
+    const byAge = String(a.createdAt).localeCompare(String(b.createdAt));
+    if (byAge) return byAge;
+    return String(a.id).localeCompare(String(b.id)); // stabil, auch bei gleichem Zeitstempel
+  }
+
+  /** Wie compareItems, aber ueber mehrere Tage hinweg (Tag zuerst). */
+  function compareByDay(a, b) {
+    const byDay = String(a.day || '').localeCompare(String(b.day || ''));
+    return byDay || compareItems(a, b);
   }
 
   return {
@@ -101,5 +121,6 @@
     isOpen,
     nextStatus,
     compareItems,
+    compareByDay,
   };
 });

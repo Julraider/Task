@@ -76,6 +76,32 @@
     return out;
   }
 
+  /** Alle Tage von `startKey` bis `endKey` (beide inklusive). Leer, wenn Ende vor Start. */
+  function daysBetween(startKey, endKey) {
+    const span = diffDays(startKey, endKey);
+    if (span < 0) return [];
+    return daysFrom(startKey, span + 1);
+  }
+
+  /** Die letzten `count` Tage bis einschliesslich `endKey` (default: heute). */
+  function lastDays(count, endKey) {
+    const end = endKey || todayKey();
+    const n = Math.max(1, Number(count) || 1);
+    return daysFrom(addDays(end, -(n - 1)), n);
+  }
+
+  /** Erster Tag des Monats, in dem `key` liegt. */
+  function startOfMonth(key) {
+    const d = parseKey(key);
+    return keyOf(new Date(d.getFullYear(), d.getMonth(), 1, 12, 0, 0, 0));
+  }
+
+  /** Letzter Tag des Monats, in dem `key` liegt (Tag 0 des Folgemonats). */
+  function endOfMonth(key) {
+    const d = parseKey(key);
+    return keyOf(new Date(d.getFullYear(), d.getMonth() + 1, 0, 12, 0, 0, 0));
+  }
+
   /** ISO-8601 Kalenderwoche { year, week } */
   function isoWeek(key) {
     const d = parseKey(key);
@@ -92,6 +118,23 @@
   function isoWeekLabel(key) {
     const { week } = isoWeek(key);
     return `KW ${pad(week)}`;
+  }
+
+  /**
+   * Montag der ISO-Kalenderwoche `week` im ISO-Jahr `year`.
+   * Der 4. Januar liegt per Definition immer in KW 1.
+   * Gibt null zurueck, wenn es die Woche in dem Jahr nicht gibt (KW 53).
+   */
+  function mondayOfIsoWeek(year, week) {
+    const w = Number(week);
+    if (!Number.isInteger(w) || w < 1 || w > 53) return null;
+    const key = mondayOfIsoWeekRaw(Number(year), w);
+    return isoWeek(key).week === w ? key : null;
+  }
+
+  function mondayOfIsoWeekRaw(year, week) {
+    const jan4 = keyOf(new Date(year, 0, 4, 12, 0, 0, 0));
+    return addDays(startOfWeek(jan4), (week - 1) * 7);
   }
 
   function shortWeekday(key) {
@@ -118,6 +161,27 @@
     return parseKey(key).toLocaleDateString('de-DE');
   }
 
+  /** 'August 2026' */
+  function monthLabel(key) {
+    return parseKey(key).toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
+  }
+
+  /**
+   * Kompakte Spanne fuer Ueberschriften:
+   * '17.–21.08.2026' (gleicher Monat), '17.08. – 03.09.2026' (gleiches Jahr),
+   * sonst beide Daten voll.
+   */
+  function rangeLabel(startKey, endKey) {
+    if (!endKey || startKey === endKey) return formatNumeric(startKey);
+    const a = parseKey(startKey);
+    const b = parseKey(endKey);
+    if (a.getFullYear() === b.getFullYear()) {
+      if (a.getMonth() === b.getMonth()) return `${pad(a.getDate())}.–${formatNumeric(endKey)}`;
+      return `${formatShort(startKey)} – ${formatNumeric(endKey)}`;
+    }
+    return `${formatNumeric(startKey)} – ${formatNumeric(endKey)}`;
+  }
+
   /** 'Heute' / 'Gestern' / 'Morgen' / sonst der lange Name. */
   function relativeLabel(key, reference) {
     const ref = reference || todayKey();
@@ -138,6 +202,18 @@
     return d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
   }
 
+  /** '17.08.2026 09:10' aus einem ISO-Zeitstempel - so versteht Excel es direkt. */
+  function formatDateTime(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    return `${keyOfNumeric(d)} ${d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}`;
+  }
+
+  function keyOfNumeric(date) {
+    return `${pad(date.getDate())}.${pad(date.getMonth() + 1)}.${date.getFullYear()}`;
+  }
+
   return {
     WEEKDAYS_SHORT,
     keyOf,
@@ -150,13 +226,21 @@
     isWeekend,
     startOfWeek,
     daysFrom,
+    daysBetween,
+    lastDays,
+    startOfMonth,
+    endOfMonth,
     isoWeek,
     isoWeekLabel,
+    mondayOfIsoWeek,
     shortWeekday,
     formatLong,
     formatShort,
     formatNumeric,
+    monthLabel,
+    rangeLabel,
     relativeLabel,
     formatTime,
+    formatDateTime,
   };
 });
