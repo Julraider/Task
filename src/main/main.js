@@ -195,11 +195,11 @@ function watchPower() {
     }
   };
 
+  // Kein quitting-Merker hier: ein abgebrochenes Herunterfahren wuerde sonst
+  // dazu fuehren, dass das naechste Fensterschliessen die App beendet, statt
+  // sie in den Infobereich zu legen.
   safe('suspend', () => flushAll());
-  safe('shutdown', () => {
-    quitting = true;
-    flushAll();
-  });
+  safe('shutdown', () => flushAll());
   safe('lock-screen', () => flushAll());
   safe('resume', () => {
     checkDayChange('aufwachen');
@@ -258,11 +258,18 @@ function createMainWindow() {
     mainWindow.webContents.send('day:changed', { today: Dates.todayKey(), previous: null, reason: 'start' });
   });
 
-  // Strg+Mausrad zoomt nur, wenn wir es selbst umsetzen - und nur dann wissen
-  // wir auch, was wir uns merken muessen.
-  // 'in' / 'out' - Electron meldet nur den Wunsch, umsetzen muessen wir es selbst.
+  // Strg+Mausrad: 'in' / 'out'. Electron meldet den Wunsch. Ob Chromium ihn schon
+  // ausgefuehrt hat, ist je nach Plattform verschieden - deshalb erst im
+  // naechsten Durchlauf nachsehen und nur ausgleichen, was fehlt. Sonst
+  // springt eine Radumdrehung um zwei Stufen.
   mainWindow.webContents.on('zoom-changed', (_event, direction) => {
-    setZoom(currentZoom().level + (direction === 'in' ? 0.5 : -0.5));
+    const before = currentZoom().level;
+    setImmediate(() => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      const actual = mainWindow.webContents.getZoomLevel();
+      const changed = Math.abs(actual - before) > 0.01;
+      setZoom(changed ? actual : before + (direction === 'in' ? 0.5 : -0.5));
+    });
   });
 
   // Strg + Plus/Minus/Null selbst abfangen: die Menue-Kuerzel greifen nicht auf
