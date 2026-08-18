@@ -1,5 +1,14 @@
 /*
- * Dialoge: Einstellungen, Export und Hilfe.
+ * Dialoge: Einstellungen, Export, Hilfe - dazu die Rueckfrage, die vor
+ * ueberschreibenden Schritten steht.
+ *
+ * Form nach docs/design-system.md §5.5: Kopf 44 px mit Titel und
+ * Schliessen-Knopf, Inhalt in Gruppen mit Versalien-Ueberschrift und
+ * Haarlinie, Fusszeile rechtsbuendig mit der Hauptaktion aussen.
+ *
+ * Symbole kommen aus dem Icon-Satz (`Icons.svg`). Der Satz wird bewusst nur
+ * gefragt, nie vorausgesetzt: fehlt er, bleiben die Knoepfe beschriftet und
+ * der Dialog vollstaendig bedienbar.
  */
 window.Dialogs = (function () {
   const { h } = Util;
@@ -7,25 +16,84 @@ window.Dialogs = (function () {
 
   let dialogCount = 0;
 
+  // ------------------------------------------------------------- Icon-Satz
+
   /**
-   * Grundgeruest fuer alle Dialoge. Gibt {dialog, body, foot, close} zurueck.
+   * Ein Symbol holen. `names` sind Motivkennungen wie in `Model.SOURCES[].iconId`.
    *
-   * Das native <dialog> haelt den Fokus von sich aus im Dialog und schliesst
-   * bei Esc. Ergaenzt wird hier nur, was es nicht mitbringt: sinnvoller
-   * Startfokus und der Weg zurueck zum ausloesenden Bedienelement.
+   * Kennt der Satz eine Auskunftsfunktion (`has`/`names`), wird der erste
+   * *bekannte* Name genommen; sonst nur der erste Vorschlag - ein Satz, der
+   * fuer Unbekanntes ein Ersatzmotiv liefert, wuerde sonst ein falsches Bild
+   * einsetzen. Kommt nichts zurueck, kommt eben nichts zurueck: `Util.h`
+   * ueberspringt `null` und der Knopf traegt allein seine Beschriftung.
+   */
+  function icon(...names) {
+    const set = window.Icons;
+    if (!set || typeof set.svg !== 'function') return null;
+
+    const knows =
+      typeof set.has === 'function'
+        ? (name) => !!set.has(name)
+        : Array.isArray(set.names)
+          ? (name) => set.names.includes(name)
+          : null;
+
+    const wanted = knows ? names.filter(knows) : names.slice(0, 1);
+    for (const name of wanted) {
+      try {
+        const node = set.svg(name);
+        if (node instanceof Node) return node;
+      } catch (err) {
+        /* Diesen Namen kennt der Satz nicht - naechster Versuch. */
+      }
+    }
+    return null;
+  }
+
+  // ----------------------------------------------------------- Grundgeruest
+
+  const FOCUSABLE = [
+    'a[href]',
+    'button:not([disabled])',
+    'input:not([disabled])',
+    'select:not([disabled])',
+    'textarea:not([disabled])',
+    '[tabindex]:not([tabindex="-1"])',
+  ].join(', ');
+
+  function focusables(root) {
+    return Util.els(FOCUSABLE, root).filter((node) => node.getClientRects().length > 0);
+  }
+
+  /**
+   * Grundgeruest fuer alle Dialoge.
+   *
+   * Das native <dialog> bringt Fokusfang und Esc schon mit. Ergaenzt wird
+   * hier, was fehlt: ein sinnvoller Startfokus, ein Tabulator, der am Ende
+   * wieder vorn anfaengt (§4.4), der Weg zurueck aufs ausloesende Element und
+   * Aufraeumarbeiten beim Schliessen.
+   *
+   * @returns {{dialog, body, foot, close, onClose, focusOnOpen}}
    */
   function makeDialog(title, options = {}) {
     const opener = document.activeElement;
     const titleId = 'dialogTitle' + ++dialogCount;
+    const cleanups = [];
+    let initialFocus = null;
 
-    const body = h('div', { class: 'dialog__body' });
-    const foot = h('div', { class: 'dialog__foot' });
-    const closeBtn = h('button', { class: 'iconbtn', type: 'button', title: 'Schließen (Esc)', 'aria-label': 'Schließen' }, '×');
+    const body = h('div', { class: 'dialog__body', tabindex: '-1' });
+    const foot = h('div', { class: 'dialog__foot row row--end' });
+    const closeBtn = h(
+      'button',
+      { class: 'iconbtn dialog__close', type: 'button', title: 'Schließen (Esc)', 'aria-label': 'Schließen' },
+      icon('schliessen', 'kreuz', 'close') || '×'
+    );
 
-    const dialog = h('dialog', { class: 'dialog' + (options.wide ? ' dialog--wide' : ''), 'aria-labelledby': titleId },
+    const modifier = options.wide ? ' dialog--wide' : options.narrow ? ' dialog--narrow' : '';
+    const dialog = h('dialog', { class: 'dialog' + modifier, 'aria-labelledby': titleId },
       h('div', { class: 'dialog__inner' },
         h('header', { class: 'dialog__head' },
-          h('h2', { id: titleId }, title),
+          h('h2', { id: titleId, class: 'dialog__title' }, title),
           closeBtn
         ),
         body,
@@ -35,30 +103,106 @@ window.Dialogs = (function () {
 
     const close = () => dialog.close();
     closeBtn.addEventListener('click', close);
+
+    // Tabulator im Dialog halten. Das native <dialog> tut das bereits; die
+    // Schleife hier sorgt zusaetzlich dafuer, dass hinter dem letzten Element
+    // wieder das erste kommt statt der Adressleiste des Fensters.
+    dialog.addEventListener('keydown', (ev) => {
+      if (ev.key !== 'Tab') return;
+      const list = focusables(dialog);
+      if (!list.length) return;
+      const first = list[0];
+      const last = list[list.length - 1];
+      const active = document.activeElement;
+      const inside = dialog.contains(active);
+      if (ev.shiftKey && (!inside || active === first)) {
+        ev.preventDefault();
+        last.focus();
+      } else if (!ev.shiftKey && (!inside || active === last)) {
+        ev.preventDefault();
+        first.focus();
+      }
+    });
+
     dialog.addEventListener('close', () => {
+      for (const fn of cleanups.splice(0)) {
+        try {
+          fn();
+        } catch (err) {
+          console.warn('[dialogs] Aufräumen fehlgeschlagen:', err && err.message);
+        }
+      }
       dialog.remove();
-      if (opener && document.contains(opener)) opener.focus();
+      if (opener && document.contains(opener) && typeof opener.focus === 'function') opener.focus();
     });
 
     document.body.appendChild(dialog);
     dialog.showModal();
 
-    // Der Inhalt wird erst nach dieser Funktion eingehaengt - deshalb den
-    // Startfokus im naechsten Frame setzen.
+    // Der Inhalt haengt erst nach dieser Funktion im Dialog - deshalb den
+    // Startfokus im naechsten Bild setzen.
     requestAnimationFrame(() => {
-      const first = dialog.querySelector('.dialog__body select, .dialog__body input, .dialog__body button');
-      (first || closeBtn).focus();
+      if (!dialog.isConnected) return;
+      const first = initialFocus || dialog.querySelector('.dialog__body select, .dialog__body input, .dialog__body button');
+      // Ohne Bedienelement bekommt der Inhalt selbst den Fokus: dann blaettern
+      // Bild-auf und Bild-ab sofort, ohne erst irgendwo hineinklicken zu muessen.
+      (first || body || closeBtn).focus();
     });
 
-    return { dialog, body, foot, close };
+    return {
+      dialog,
+      body,
+      foot,
+      close,
+      /** Beim Schliessen aufrufen (Abmelden von Ereignissen, Zeitgeber). */
+      onClose: (fn) => cleanups.push(fn),
+      /** Startfokus abweichend festlegen. */
+      focusOnOpen: (node) => {
+        initialFocus = node;
+      },
+    };
+  }
+
+  /**
+   * Rueckfrage vor einem Schritt, der etwas ueberschreibt oder entfernt.
+   * Bewusst ein eigener Dialog statt window.confirm: der Systemdialog bringt
+   * seine eigene Schrift, seine eigenen Knopfbeschriftungen und im dunklen
+   * Thema eine helle Flaeche mit.
+   *
+   * @returns {Promise<boolean>}
+   */
+  function ask(title, lines, options = {}) {
+    return new Promise((resolve) => {
+      const { body, foot, close, onClose, focusOnOpen } = makeDialog(title, { narrow: true });
+      let answer = false;
+
+      for (const line of [].concat(lines)) {
+        if (line) body.append(h('p', { class: 'dialog__text' }, line));
+      }
+
+      const cancel = button('Abbrechen', { variant: 'ghost', onClick: close });
+      const confirm = button(options.confirmLabel || 'Fortfahren', {
+        variant: options.danger ? 'danger' : 'primary',
+        icon: options.icon,
+        onClick: () => {
+          answer = true;
+          close();
+        },
+      });
+
+      foot.append(h('div', { class: 'row__spacer' }), cancel, confirm);
+      // Startfokus auf der harmlosen Antwort - wer blind Enter drueckt, bricht ab.
+      focusOnOpen(cancel);
+      onClose(() => resolve(answer));
+    });
   }
 
   // ------------------------------------------------------------ Einstellungen
 
   /**
    * Standardwerte, die "Zurücksetzen" wiederherstellt.
-   * Spiegelt DEFAULTS aus src/main/settings.js - ohne Fensterposition,
-   * die soll ein Zuruecksetzen der Optionen nicht anfassen.
+   * Spiegelt DEFAULTS aus src/main/settings.js - ohne Fensterposition und
+   * Zoomstufe, die soll ein Zuruecksetzen der Optionen nicht anfassen.
    */
   const SETTINGS_DEFAULTS = {
     theme: 'system',
@@ -68,11 +212,12 @@ window.Dialogs = (function () {
     closeToTray: true,
     launchAtLogin: false,
     confirmDelete: false,
+    backupKeepDays: 14,
   };
 
   function openSettings() {
     const s = State.get().settings;
-    const { body, foot, close } = makeDialog('Einstellungen');
+    const { body, foot, close, onClose } = makeDialog('Einstellungen');
 
     // --- Darstellung ---
     const themeSelect = h('select', { class: 'field', 'aria-label': 'Design' },
@@ -86,7 +231,7 @@ window.Dialogs = (function () {
       'Wochenende in der Wochenansicht zeigen',
       s.showWeekend,
       (v) => State.saveSettings({ showWeekend: v }),
-      'Aus: Montag bis Freitag. An: die ganze Woche, Samstag und Sonntag angegraut.'
+      'Aus: Montag bis Freitag. An: die ganze Woche, Samstag und Sonntag eingelassen.'
     );
 
     // --- Verhalten ---
@@ -94,7 +239,7 @@ window.Dialogs = (function () {
       'Beim Schließen nur in den Infobereich legen',
       s.closeToTray,
       (v) => State.saveSettings({ closeToTray: v }),
-      'Tagwerk läuft weiter und bleibt über das Tray-Symbol und das globale Tastenkürzel erreichbar.'
+      'Tagwerk läuft weiter und bleibt über das Symbol im Infobereich und das globale Tastenkürzel erreichbar.'
     );
     const confirmDelete = checkbox(
       'Vor dem Löschen nachfragen',
@@ -167,7 +312,13 @@ window.Dialogs = (function () {
       showShortcutState(res.shortcut)
     );
 
+    // --- Meldungen, Sicherungen, Angaben zur Ablage ---
+    const notices = makeNotices(onClose);
+    const backups = makeBackupSection();
+    const info = makeInfoBlock();
+
     body.append(
+      notices.node,
       group('Darstellung', field('Design', themeSelect), weekend),
       group('Schnellerfassung',
         shortcutEnabled,
@@ -175,32 +326,36 @@ window.Dialogs = (function () {
         hint('Feld anklicken und die gewünschte Kombination drücken, z. B. Strg + Alt + T.'),
         shortcutState),
       group('Verhalten', closeToTray, confirmDelete, autostart),
+      backups.node,
       group('Daten',
         h('div', { class: 'row' },
-          h('button', { class: 'btn', type: 'button', onclick: () => api.openDataFolder() }, 'Datenordner öffnen'),
-          h('button', { class: 'btn', type: 'button', onclick: () => { close(); openExport(); } }, 'Exportieren …'),
-          h('button', { class: 'btn', type: 'button', onclick: () => importData('merge') }, 'Importieren …')
+          button('Datenordner öffnen', { icon: ['ordner', 'ordner-oeffnen'], onClick: () => api.openDataFolder() }),
+          button('Exportieren …', { icon: ['export', 'exportieren'], onClick: () => { close(); openExport(); } }),
+          button('Importieren …', { onClick: () => importData('merge') })
         ),
-        hint('Alle Aufgaben liegen in einer einzigen JSON-Datei. Zum Sichern reicht es, den Ordner zu kopieren. ' +
-          'Importieren ergänzt die Datei um alles, was noch nicht da ist.')
+        hint('Alle Aufgaben liegen in einer einzigen JSON-Datei. Importieren ergänzt sie um alles, was noch nicht da ist.')
       ),
-      infoBlock()
+      info
     );
 
     foot.append(
-      h('button', {
-        class: 'btn btn--danger-ghost', type: 'button',
+      button('Zurücksetzen', {
+        variant: 'danger',
         title: 'Alle Optionen auf den Auslieferungszustand zurücksetzen',
-        onclick: async () => {
-          if (!window.confirm('Alle Einstellungen auf die Standardwerte zurücksetzen?')) return;
+        onClick: async () => {
+          const yes = await ask('Einstellungen zurücksetzen', [
+            'Alle Optionen gehen auf den Auslieferungszustand zurück.',
+            'Aufgaben und Sicherungen bleiben unberührt.',
+          ], { confirmLabel: 'Zurücksetzen', danger: true });
+          if (!yes) return;
           await State.saveSettings({ ...SETTINGS_DEFAULTS });
           Util.toast('Einstellungen zurückgesetzt');
           close();
           openSettings();
         },
-      }, 'Zurücksetzen'),
+      }),
       h('div', { class: 'row__spacer' }),
-      h('button', { class: 'btn btn--primary', type: 'button', onclick: close }, 'Fertig')
+      button('Fertig', { variant: 'primary', onClick: close })
     );
   }
 
@@ -213,16 +368,341 @@ window.Dialogs = (function () {
       .join(' + ');
   }
 
-  function infoBlock() {
-    const box = h('div', { class: 'dialog__info' }, 'Version wird geladen …');
-    api.appInfo().then((res) => {
-      if (!res.ok) return;
+  // -------------------------------------------------------------- Meldungen
+  //
+  // Der Main-Prozess meldet Schreibschutz, defekte Dateien und ein belegtes
+  // Tastenkuerzel ueber `getStatus()` / `onStatusChanged()`. Ohne Anzeige
+  // faellt so etwas erst auf, wenn Daten fehlen - deshalb steht der Block
+  // ganz oben im Dialog, vor allen Optionen.
+
+  const LEVELS = {
+    error: { label: 'Fehler', rank: 0 },
+    warn: { label: 'Warnung', rank: 1 },
+    info: { label: 'Hinweis', rank: 2 },
+  };
+
+  function makeNotices(onClose) {
+    const node = h('div', { class: 'dialog__notices' });
+
+    function render(status) {
+      Util.clear(node);
+      const problems = ((status && status.problems) || []).slice();
+      if (!problems.length) return;
+
+      problems.sort((a, b) => (LEVELS[a.level] || LEVELS.info).rank - (LEVELS[b.level] || LEVELS.info).rank);
+      node.append(groupCounted('Meldungen', problems.length, ...problems.map(noticeRow)));
+    }
+
+    function noticeRow(problem) {
+      const level = LEVELS[problem.level] ? problem.level : 'info';
+      const meta = [];
+      if (problem.at) meta.push(Dates.formatDateTime(problem.at));
+      if (problem.count > 1) meta.push(`${problem.count} ×`);
+
+      const dismiss = h('button', {
+        class: 'iconbtn notice__dismiss',
+        type: 'button',
+        title: 'Meldung wegklicken',
+        'aria-label': 'Meldung wegklicken',
+        onclick: async () => {
+          await api.dismissProblem(problem.code);
+          refresh();
+        },
+      }, icon('schliessen', 'kreuz', 'close') || '×');
+
+      return h('div', { class: 'notice notice--' + level },
+        h('span', { class: 'notice__mark', 'aria-hidden': 'true' },
+          level === 'info' ? null : icon('warnung', 'achtung')),
+        h('div', { class: 'notice__body' },
+          h('div', { class: 'notice__label' }, LEVELS[level].label),
+          h('div', { class: 'notice__text' }, problem.message || problem.code),
+          meta.length ? h('div', { class: 'notice__meta' }, meta.join(' · ')) : null
+        ),
+        dismiss
+      );
+    }
+
+    async function refresh() {
+      const res = await api.getStatus();
+      render(res && res.ok ? res.status : null);
+    }
+
+    // Ein Schreibfehler passiert waehrend der Dialog offen steht - dann soll
+    // die Meldung nicht erst beim naechsten Oeffnen auftauchen.
+    const stop = api.onStatusChanged((status) => render(status));
+    if (typeof stop === 'function') onClose(stop);
+    refresh();
+
+    return { node, refresh };
+  }
+
+  // ------------------------------------------------------------ Sicherungen
+  //
+  // Der Main-Prozess legt taeglich und vor jedem gefaehrlichen Schritt eine
+  // Sicherung an. Ohne Bedienung davor bleibt das ein Ordner, den niemand
+  // findet - hier ist er eine Liste mit Datum, Umfang und Groesse.
+
+  const BACKUP_KINDS = {
+    tag: 'Tagessicherung',
+    sicherung: 'Sicherung',
+    konflikt: 'Konfliktfassung',
+    defekt: 'Defekte Fassung',
+    nicht: 'Nicht gespeicherter Stand',
+  };
+
+  const BACKUP_REASONS = {
+    manuell: 'von Hand',
+    'vor-import': 'vor dem Import',
+    'vor-wiederherstellung': 'vor dem Wiederherstellen',
+    'vor-aufraeumen': 'vor dem Aufräumen',
+  };
+
+  /** 'sicherung-2026-08-18T07-05-00-vor-import.json' -> 'Sicherung, vor dem Import' */
+  function backupLabel(entry) {
+    const kind = BACKUP_KINDS[entry.kind] || entry.kind || 'Sicherung';
+    const match = /^sicherung-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-(.+)\.json$/.exec(entry.name || '');
+    if (!match) return kind;
+    const reason = BACKUP_REASONS[match[1]] || match[1].replace(/-/g, ' ');
+    return `${kind}, ${reason}`;
+  }
+
+  /** 42.918 -> '42 kB'. Tabellarisch gedacht: eine Nachkommastelle erst ab MB. */
+  function formatBytes(bytes) {
+    const n = Number(bytes);
+    if (!Number.isFinite(n)) return '';
+    if (n < 1024) return `${n} B`;
+    if (n < 1024 * 1024) return `${Math.round(n / 1024)} kB`;
+    return `${(n / (1024 * 1024)).toLocaleString('de-DE', { maximumFractionDigits: 1 })} MB`;
+  }
+
+  /** Auswahl fuer "Erledigtes aufräumen": Stichtage relativ zu heute. */
+  const PURGE_RANGES = [
+    { days: 30, label: 'älter als 30 Tage' },
+    { days: 90, label: 'älter als 90 Tage' },
+    { days: 180, label: 'älter als ein halbes Jahr' },
+    { days: 365, label: 'älter als ein Jahr' },
+  ];
+
+  function makeBackupSection() {
+    const pickName = 'backupPick' + dialogCount;
+    let selected = null;
+
+    const list = h('div', { class: 'backups__scroll' });
+    const dirHint = hint('');
+
+    const restoreBtn = button('Wiederherstellen …', {
+      icon: ['rueckgaengig', 'zurueck'],
+      disabled: true,
+      title: 'Den gewählten Stand zurückholen',
+      onClick: () => restore(),
+    });
+
+    const createBtn = button('Sicherung jetzt anlegen', {
+      icon: ['sicherung', 'kopieren'],
+      onClick: async () => {
+        const res = await api.createBackup('manuell');
+        if (!res || !res.ok) {
+          Util.toast((res && res.error) || 'Sicherung fehlgeschlagen', { tone: 'error' });
+          return;
+        }
+        Util.toast('Sicherung angelegt');
+        selected = res.name;
+        await refresh();
+      },
+    });
+
+    // --- Aufbewahrung ---
+    const keepInput = h('input', {
+      class: 'field field--num',
+      type: 'number',
+      min: '1',
+      max: '365',
+      step: '1',
+      value: String(State.get().settings.backupKeepDays || 14),
+      'aria-label': 'Tagessicherungen aufheben (Tage)',
+    });
+    keepInput.addEventListener('change', async () => {
+      const n = Math.max(1, Math.min(365, Math.round(Number(keepInput.value) || 0)));
+      keepInput.value = String(n);
+      const res = await State.saveSettings({ backupKeepDays: n });
+      if (res && res.ok) {
+        keepInput.value = String(res.settings.backupKeepDays);
+        await refresh(); // eine kleinere Zahl raeumt sofort auf
+      }
+    });
+
+    // --- Aufraeumen ---
+    const purgeSelect = h('select', { class: 'field', 'aria-label': 'Erledigtes aufräumen' },
+      ...PURGE_RANGES.map((r) => h('option', { value: String(r.days) }, r.label))
+    );
+    const purgeHint = hint('');
+    const purgeBtn = button('Erledigtes aufräumen …', {
+      icon: ['papierkorb', 'loeschen'],
+      onClick: () => purge(),
+    });
+
+    function purgeBefore() {
+      return Dates.addDays(Dates.todayKey(), -Number(purgeSelect.value || 30));
+    }
+
+    function purgeVictims() {
+      const before = purgeBefore();
+      return State.get().items.filter((i) => i.status === 'erledigt' && i.day < before);
+    }
+
+    function refreshPurge() {
+      const before = purgeBefore();
+      const count = purgeVictims().length;
+      purgeBtn.disabled = count === 0;
+      purgeHint.textContent = count
+        ? `${Util.plural(count, 'erledigte Aufgabe', 'erledigte Aufgaben')} vor dem ${Dates.formatNumeric(before)}. ` +
+          'Vor dem Entfernen legt Tagwerk selbst eine Sicherung an.'
+        : `Vor dem ${Dates.formatNumeric(before)} liegt nichts Erledigtes.`;
+    }
+    purgeSelect.addEventListener('change', refreshPurge);
+
+    async function purge() {
+      const before = purgeBefore();
+      const victims = purgeVictims();
+      if (!victims.length) return;
+
+      const yes = await ask('Erledigtes aufräumen', [
+        `${Util.plural(victims.length, 'erledigte Aufgabe', 'erledigte Aufgaben')} vor dem ` +
+          `${Dates.formatNumeric(before)} werden endgültig entfernt.`,
+        'Vorher legt Tagwerk eine Sicherung an; rückgängig machen lässt sich der Schritt nur über diese Sicherung.',
+      ], { confirmLabel: 'Endgültig entfernen', danger: true, icon: ['papierkorb', 'loeschen'] });
+      if (!yes) return;
+
+      const res = await api.purgeDone(before);
+      if (!res || !res.ok) {
+        Util.toast((res && res.error) || 'Aufräumen fehlgeschlagen', { tone: 'error' });
+        return;
+      }
+      Util.toast(`${Util.plural(res.count, 'erledigte Aufgabe', 'erledigte Aufgaben')} entfernt`);
+      await refresh();
+      refreshPurge();
+    }
+
+    async function restore() {
+      const entry = current();
+      if (!entry) return;
+
+      const stand = State.get().items.length;
+      const yes = await ask('Sicherung wiederherstellen', [
+        `Der Stand vom ${Dates.formatDateTime(entry.modifiedAt)} ersetzt die aktuelle Liste.`,
+        `Damit gehen die ${Util.plural(stand, 'Aufgabe', 'Aufgaben')} von jetzt verloren – Tagwerk sichert sie ` +
+          'vorher automatisch weg, zurückholen lässt sich das dann über diese Liste.',
+      ], { confirmLabel: 'Überschreiben', danger: true, icon: ['rueckgaengig', 'zurueck'] });
+      if (!yes) return;
+
+      const res = await api.restoreBackup(entry.name);
+      if (!res || !res.ok) {
+        Util.toast((res && res.error) || 'Wiederherstellen fehlgeschlagen', { tone: 'error' });
+        return;
+      }
+      Util.toast(`${Util.plural(res.count, 'Aufgabe', 'Aufgaben')} wiederhergestellt`);
+      selected = null;
+      await refresh();
+      refreshPurge();
+    }
+
+    let entries = [];
+    const current = () => entries.find((e) => e.name === selected) || null;
+
+    function renderList() {
+      Util.clear(list);
+      restoreBtn.disabled = !current();
+
+      if (!entries.length) {
+        // §5.9: ein Satz, linksbuendig, ohne Kasten und ohne Bild.
+        list.append(h('p', { class: 'backups__empty' },
+          'Noch keine Sicherung vorhanden. Tagwerk legt beim ersten Start des Tages selbst eine an.'));
+        return;
+      }
+
+      const rows = entries.map((entry) => {
+        const radio = h('input', {
+          type: 'radio',
+          name: pickName,
+          value: entry.name,
+          checked: entry.name === selected,
+          disabled: !entry.readable,
+          'aria-label': `Sicherung vom ${Dates.formatDateTime(entry.modifiedAt)}, ${backupLabel(entry)}`,
+        });
+        radio.addEventListener('change', () => {
+          selected = entry.name;
+          restoreBtn.disabled = false;
+        });
+
+        return h('tr', { class: 'backups__row' + (entry.readable ? '' : ' backups__row--broken'), title: entry.name },
+          h('td', null,
+            h('label', { class: 'backups__pick' },
+              radio,
+              h('span', { class: 'backups__when' }, Dates.formatDateTime(entry.modifiedAt))
+            )
+          ),
+          h('td', { class: 'backups__kind' }, backupLabel(entry)),
+          h('td', { class: 'backups__count' },
+            entry.readable ? Util.plural(entry.count || 0, 'Aufgabe', 'Aufgaben') : 'nicht lesbar'),
+          h('td', { class: 'backups__size' }, formatBytes(entry.size))
+        );
+      });
+
+      list.append(h('table', { class: 'backups' }, h('tbody', null, ...rows)));
+    }
+
+    async function refresh() {
+      const res = await api.listBackups();
+      entries = (res && res.ok && Array.isArray(res.backups)) ? res.backups : [];
+      if (selected && !entries.some((e) => e.name === selected)) selected = null;
+      renderList();
+      dirHint.textContent = res && res.dir
+        ? `Ordner: ${res.dir}`
+        : 'Der Ordner mit den Sicherungen liegt neben der Datendatei.';
+    }
+
+    refresh();
+    refreshPurge();
+
+    const node = group('Sicherungen',
+      list,
+      h('div', { class: 'row' }, createBtn, restoreBtn),
+      h('div', { class: 'row backups__keep' },
+        field('Tagessicherungen aufheben', keepInput),
+        h('span', { class: 'backups__unit' }, 'Tage')
+      ),
+      hint('Ältere Tagessicherungen werden beim nächsten Anlegen entfernt. Sicherungen von Hand und vor gefährlichen Schritten bleiben unabhängig davon erhalten.'),
+      h('div', { class: 'row backups__purge' }, field('Erledigtes aufräumen', purgeSelect), purgeBtn),
+      purgeHint,
+      dirHint
+    );
+
+    return { node, refresh };
+  }
+
+  // ----------------------------------------------------- Angaben zur Ablage
+
+  function makeInfoBlock() {
+    const box = h('div', { class: 'dialog__info' }, h('div', null, 'Angaben werden geladen …'));
+
+    Promise.all([api.appInfo(), api.getStatus()]).then(([res, statusRes]) => {
+      if (!res || !res.ok) return;
       const i = res.info;
+      const st = statusRes && statusRes.ok ? statusRes.status : null;
+
+      const ablage = [];
+      if (st) {
+        ablage.push(st.readOnly ? 'Ablage schreibgeschützt' : 'Ablage beschreibbar');
+        if (st.pendingChanges) ablage.push('Änderungen werden noch geschrieben');
+        else if (st.lastSaveAt) ablage.push(`zuletzt gespeichert ${Dates.formatTime(st.lastSaveAt)}`);
+      }
+
       Util.clear(box);
       box.append(
         h('div', null, `Tagwerk ${i.version}`),
         h('div', { class: 'muted' }, `Electron ${i.electron} · Chromium ${i.chrome} · Node ${i.node}`),
-        h('div', { class: 'muted dialog__path', title: i.dataPath }, i.dataPath)
+        ablage.length ? h('div', { class: 'muted' }, ablage.join(' · ')) : null,
+        h('div', { class: 'muted dialog__path', title: i.dataFile || i.dataPath }, i.dataFile || i.dataPath)
       );
     });
     return box;
@@ -290,15 +770,13 @@ window.Dialogs = (function () {
       ...formats.map((f) => h('option', { value: f.id }, f.label))
     );
 
-    const groupSelect = h('select', { class: 'field', 'aria-label': 'Gruppierung' },
+    const groupSelect = h('select', { class: 'field', 'aria-label': 'Gliederung' },
       ...Exporter.GROUPINGS.map((g) => h('option', { value: g.id }, g.label))
     );
     const groupField = field('Gliederung', groupSelect);
 
     const preview = h('pre', { class: 'dialog__preview', tabindex: '0', 'aria-label': 'Vorschau' });
     const fileHint = h('p', { class: 'dialog__hint' });
-
-    const format = () => Exporter.formatById(formatSelect.value);
 
     function dayKeys() {
       if (scopeSelect.value === 'woche') return State.weekDays();
@@ -311,6 +789,14 @@ window.Dialogs = (function () {
       return scopeSelect.value === 'alle' ? null : dayKeys();
     }
 
+    /** Wie viele Aufgaben stecken im gewaehlten Umfang? */
+    function scopeCount() {
+      const items = State.get().items;
+      if (scopeSelect.value === 'alle') return items.length;
+      const days = new Set(dayKeys());
+      return items.filter((i) => days.has(i.day)).length;
+    }
+
     function options(extra) {
       const opts = { version: 1, ...extra };
       if (supportsGrouping(formatSelect.value)) opts.groupBy = groupSelect.value;
@@ -321,30 +807,35 @@ window.Dialogs = (function () {
       return Exporter.build(formatSelect.value, State.get().items, selection(), options(extra));
     }
 
-    const saveBtn = h('button', {
-      class: 'btn btn--primary', type: 'button',
-      onclick: async () => {
+    const saveBtn = button('Als Datei speichern', {
+      variant: 'primary',
+      onClick: async () => {
         const res = await api.exportFile(formatSelect.value, dayKeys(), scopeSelect.value, options());
         if (res.canceled) return;
         if (!res.ok) Util.toast(res.error || 'Export fehlgeschlagen', { tone: 'error' });
         else Util.toast('Gespeichert: ' + res.path);
         close();
       },
-    }, 'Als Datei speichern');
+    });
 
     function refresh() {
       const text = buildText();
-      const count = text ? text.split('\n').length : 0;
+      const lines = text ? text.split('\n').length : 0;
       preview.textContent = text.length > 4000 ? text.slice(0, 4000) + '\n…' : text || '(nichts zu exportieren)';
 
       // Ueber style statt [hidden]: die Felder sind Flex-Container, da greift
       // das hidden-Attribut nicht.
       groupField.style.display = supportsGrouping(formatSelect.value) ? '' : 'none';
       saveBtn.disabled = !text;
-      fileHint.textContent =
-        formatSelect.value === 'html'
-          ? 'Wird formatiert eingefügt – in einer Outlook-Mail einfach Strg + V.'
-          : `${Util.plural(count, 'Zeile', 'Zeilen')} · Speichern fragt nach dem Ort.`;
+
+      const parts = [Util.plural(scopeCount(), 'Aufgabe', 'Aufgaben')];
+      if (formatSelect.value === 'html') {
+        parts.push('wird formatiert eingefügt – in einer Outlook-Mail einfach Strg + V');
+      } else {
+        parts.push(Util.plural(lines, 'Zeile', 'Zeilen'));
+        parts.push('Dateiendung .' + Exporter.formatById(formatSelect.value).ext);
+      }
+      fileHint.textContent = parts.join(' · ');
     }
 
     scopeSelect.addEventListener('change', refresh);
@@ -359,9 +850,9 @@ window.Dialogs = (function () {
 
     foot.append(
       h('div', { class: 'row__spacer' }),
-      h('button', {
-        class: 'btn', type: 'button',
-        onclick: async () => {
+      button('In Zwischenablage', {
+        icon: ['kopieren'],
+        onClick: async () => {
           const text = buildText();
           if (!text) {
             Util.toast('Nichts zu kopieren', { tone: 'error' });
@@ -380,7 +871,7 @@ window.Dialogs = (function () {
           Util.toast('In die Zwischenablage kopiert');
           close();
         },
-      }, 'In Zwischenablage'),
+      }),
       saveBtn
     );
   }
@@ -405,6 +896,20 @@ window.Dialogs = (function () {
 
   // --------------------------------------------------------------- Hilfe
 
+  /**
+   * Die erkannten Ticket-Praefixe stehen als Muster im Parser. Sie hier
+   * abzulesen statt sie abzuschreiben heisst: die Hilfe kann nicht veralten.
+   */
+  function refPrefixes() {
+    try {
+      const found = /\(\?:([A-Z|]+)\)/.exec(Parse.REF_PATTERN.source);
+      if (found) return found[1].split('|').join(', ');
+    } catch (err) {
+      /* Muster anders gebaut - dann eben die kurze Aufzaehlung unten. */
+    }
+    return 'INC, RITM, REQ, CHG, PRB, TASK, KB';
+  }
+
   function openHelp() {
     const { body, foot, close } = makeDialog('Kurzanleitung', { wide: true });
 
@@ -412,12 +917,15 @@ window.Dialogs = (function () {
     const sourceList = Model.SOURCES.map((s) => '@' + s.id).join(' ');
 
     const syntax = [
-      ['@quelle', 'Woher kam die Aufgabe: ' + sourceList + ' (Kurzformen wie @out oder @snow gehen auch)'],
-      ['#tag', 'Beliebig viele Schlagworte, z. B. #netzwerk'],
+      ['@quelle', 'Woher kam die Aufgabe: ' + sourceList +
+        '. Eindeutige Anfänge und kleine Tippfehler gehen auch (@out, @snow, @outlok); Mehrdeutiges bleibt im Titel stehen.'],
+      ['#tag', 'Beliebig viele Schlagworte, z. B. #netzwerk. Reine Zahlen zählen nicht – „#4711" bleibt Text.'],
       ['!  /  !!', 'Priorität hoch bzw. dringend'],
-      ['>tag', 'Zieltag: >heute >morgen >uebermorgen, >mo … >so, >+3, >24.12., >2026-12-24'],
-      ['>nächste woche', 'Auch in Worten: >ende der woche, >nächsten montag, >kw35, >monatsende, >in 3 tagen, >in 2 wochen'],
-      ['INC0012345', 'Ticketnummern (INC, RITM, REQ, CHG, PRB, SR, SCTASK, CTASK, TASK, KB) werden als Referenz erkannt und setzen die Quelle auf Ticket – auch aus einem eingefügten ServiceNow- oder Jira-Link'],
+      ['>tag', '>heute >morgen >uebermorgen >gestern, >mo … >so, >+3 >-1 >+2w, >24.12., >24.12.2026, >2026-12-24'],
+      ['>in Worten', '>nächste woche, >übernächste woche, >nächsten montag, >ende der woche, >wochenanfang, ' +
+        '>monatsende, >monatsanfang, >nächsten monat, >kw35, >in 3 tagen, >in 2 wochen'],
+      ['Ticketnummer', `${refPrefixes()} – gefolgt von mindestens drei Ziffern. Wird als Referenz erkannt und setzt ` +
+        'die Quelle auf Ticket, auch aus einem eingefügten ServiceNow- oder Jira-Link.'],
     ];
 
     const listKeys = [
@@ -454,6 +962,11 @@ window.Dialogs = (function () {
       ['Esc', 'Schließen'],
     ];
 
+    const exportRows = Exporter.FORMATS.map((f) => {
+      const [name, erklaerung] = String(f.label).split(/\s+–\s+/);
+      return ['.' + f.ext, erklaerung ? `${name}: ${erklaerung}` : name];
+    });
+
     const table = (rows) =>
       h('table', { class: 'helptable' },
         h('tbody', null, ...rows.map(([k, v]) => h('tr', null, h('td', null, h('code', null, k)), h('td', null, v))))
@@ -466,30 +979,67 @@ window.Dialogs = (function () {
           'Unter dem Feld steht live, was erkannt wurde.')),
       group('Tastenkürzel', table(keys)),
       group('In der Liste', table(listKeys),
-        hint('Gilt, sobald eine Karte den Fokus hat – einmal hineinklicken oder mit Tab dorthin wechseln.')),
+        hint('Gilt, sobald eine Zeile den Fokus hat – einmal hineinklicken oder mit Tab dorthin wechseln.')),
       group('Schnellerfassung', table(quickKeys),
         hint('Das kleine Fenster erscheint über allem anderen – auch wenn Tagwerk im Hintergrund läuft. ' +
           'Das systemweite Kürzel dafür steht in den Einstellungen; dort ist auch zu sehen, ob es wirklich greift.')),
       group('Aufgaben verschieben',
-        hint('In der Wochenansicht lassen sich Aufgaben zwischen den Tagen ziehen. Der Pfeil ⟶ auf einer Karte schiebt sie einen Tag weiter. ' +
-          'In der Tagesansicht holt „Alle herholen" alles Liegengebliebene aus früheren Tagen auf den angezeigten Tag.'))
+        hint('In der Wochenansicht lassen sich Aufgaben zwischen den Tagen ziehen. Der Knopf „Weiterschieben" in der Zeile ' +
+          'legt sie einen Tag später ab. In der Tagesansicht holt „Alle herholen" alles Liegengebliebene aus früheren Tagen ' +
+          'auf den angezeigten Tag.')),
+      group('Export', table(exportRows),
+        hint('Emoji stehen nur im Export – dort sind sie die einzige Auszeichnung, die in Editor, Excel und Outlook ankommt.')),
+      group('Sicherungen',
+        hint('Tagwerk sichert beim ersten Start des Tages und vor jedem Schritt, der etwas überschreibt. ' +
+          'Liste, Wiederherstellen und Aufräumen stehen in den Einstellungen unter „Sicherungen".'))
     );
 
     foot.append(
       h('div', { class: 'row__spacer' }),
-      h('button', { class: 'btn', type: 'button', onclick: () => { close(); openSettings(); } }, 'Einstellungen …'),
-      h('button', { class: 'btn btn--primary', type: 'button', onclick: close }, 'Alles klar')
+      button('Einstellungen …', { icon: ['einstellungen', 'regler'], onClick: () => { close(); openSettings(); } }),
+      button('Alles klar', { variant: 'primary', onClick: close })
     );
   }
 
   // ----------------------------------------------------------- Bausteine
 
   function group(title, ...children) {
-    return h('section', { class: 'dialog__group' }, h('h3', null, title), ...children);
+    return h('section', { class: 'dialog__group' }, h('h3', { class: 'dialog__groupTitle' }, title), ...children);
+  }
+
+  /** Gruppe mit Anzahl rechts in der Ueberschrift (wie die Gruppenkoepfe der Tagesliste). */
+  function groupCounted(title, count, ...children) {
+    return h('section', { class: 'dialog__group' },
+      h('h3', { class: 'dialog__groupTitle' },
+        h('span', null, title),
+        h('span', { class: 'dialog__groupCount' }, String(count))
+      ),
+      ...children
+    );
   }
 
   function field(label, control) {
-    return h('label', { class: 'dialog__field' }, h('span', null, label), control);
+    return h('label', { class: 'dialog__field' }, h('span', { class: 'dialog__fieldLabel' }, label), control);
+  }
+
+  /**
+   * Knopf nach §5.6. Ein vorhandenes Symbol bringt die Klasse `btn--icon`
+   * mit (Innenabstand links 8, rechts 12) - fehlt der Icon-Satz, fehlt auch
+   * die Klasse und der Knopf ist ein normaler Textknopf.
+   */
+  function button(label, options = {}) {
+    const glyph = options.icon ? icon(...[].concat(options.icon)) : null;
+    const classes = ['btn'];
+    if (options.variant) classes.push('btn--' + options.variant);
+    if (glyph) classes.push('btn--icon');
+
+    return h('button', {
+      class: classes.join(' '),
+      type: 'button',
+      title: options.title || null,
+      disabled: !!options.disabled,
+      onclick: options.onClick,
+    }, glyph, h('span', null, label));
   }
 
   function checkbox(label, checked, onChange, description) {

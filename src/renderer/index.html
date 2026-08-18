@@ -11,10 +11,21 @@
   </head>
   <body>
     <div class="app">
+      <!-- Kopfzeile: 44 px, Wortmarke, Ansicht, Datum, Suche, Werkzeuge -->
       <header class="topbar">
         <div class="row topbar__group topbar__group--start">
           <div class="brand">
-            <span class="brand__mark" aria-hidden="true">✓</span>
+            <!--
+              Die Marke ist eine Zeichnung, kein Kasten mit Buchstabe:
+              drei waagerechte Striche (11 / 7 / 9 px) - ein Fahrplaneintrag.
+            -->
+            <svg class="brand__mark" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" focusable="false">
+              <g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                <path d="M.75 2.25h10.5" />
+                <path d="M.75 6h6.5" />
+                <path d="M.75 9.75h8.5" />
+              </g>
+            </svg>
             <span class="brand__name">Tagwerk</span>
           </div>
 
@@ -25,17 +36,17 @@
         </div>
 
         <div class="datenav" role="group" aria-label="Zeitraum wechseln">
-          <button class="iconbtn" id="btnPrev" type="button" title="Zurück (Alt + ←)" aria-label="Zurück">‹</button>
-          <button class="btn btn--ghost" id="btnToday" type="button" title="Zu heute springen (Alt + ↓)">Heute</button>
-          <button class="iconbtn" id="btnNext" type="button" title="Vor (Alt + →)" aria-label="Vor">›</button>
+          <button class="iconbtn datenav__step" id="btnPrev" type="button" title="Zurück (Alt + ←)" aria-label="Zurück"></button>
           <span class="datenav__label" id="dateLabel"></span>
+          <button class="iconbtn datenav__step" id="btnNext" type="button" title="Vor (Alt + →)" aria-label="Vor"></button>
+          <button class="iconbtn datenav__today" id="btnToday" type="button" title="Zu heute springen (Alt + ↓)" aria-label="Zu heute springen"></button>
         </div>
 
         <div class="topbar__spacer"></div>
 
         <div class="row topbar__group topbar__group--end">
           <div class="search">
-            <span class="search__icon" aria-hidden="true">⌕</span>
+            <span class="search__icon" aria-hidden="true"></span>
             <input
               id="searchInput"
               type="search"
@@ -47,34 +58,48 @@
           </div>
 
           <div class="row topbar__actions" role="group" aria-label="Werkzeuge">
-            <button class="iconbtn" id="btnQuickTop" type="button" title="Schnellerfassung öffnen" aria-label="Schnellerfassung öffnen">⚡</button>
-            <button class="iconbtn" id="btnExport" type="button" title="Exportieren (Strg + E)" aria-label="Exportieren">⇪</button>
-            <button class="iconbtn" id="btnHelp" type="button" title="Kurzanleitung (F1)" aria-label="Kurzanleitung">?</button>
-            <button class="iconbtn" id="btnSettings" type="button" title="Einstellungen (Strg + ,)" aria-label="Einstellungen">⚙</button>
+            <button class="iconbtn" id="btnQuickTop" type="button" title="Schnellerfassung öffnen (Strg + Umschalt + N)" aria-label="Schnellerfassung öffnen"></button>
+            <button class="iconbtn" id="btnExport" type="button" title="Exportieren (Strg + E)" aria-label="Exportieren"></button>
+            <button class="iconbtn" id="btnHelp" type="button" title="Kurzanleitung (F1)" aria-label="Kurzanleitung"></button>
+            <button class="iconbtn" id="btnSettings" type="button" title="Einstellungen (Strg + ,)" aria-label="Einstellungen"></button>
           </div>
         </div>
       </header>
 
+      <!-- Erfassungszeile: 54 px, Feld + Knopf, darunter die Erkennungsvorschau -->
       <section class="capture" aria-label="Aufgabe erfassen">
         <form class="capture__form" id="captureForm" autocomplete="off">
-          <input
-            class="capture__input"
-            id="captureInput"
-            type="text"
-            placeholder="Was ist reingekommen?  z. B.  Switch tauschen @muendlich #netzwerk ! >morgen"
-            aria-label="Neue Aufgabe"
-            aria-describedby="captureHelp"
-            spellcheck="false"
-          />
-          <button class="btn btn--primary" id="captureSubmit" type="submit">Erfassen</button>
+          <div class="capture__field">
+            <!--
+              Die Vorschlagsliste steht bewusst VOR dem Feld: sie schwebt
+              darueber, und ohne Positionierung landet sie wenigstens an der
+              richtigen Seite.
+            -->
+            <div class="capture__suggest" id="captureSuggest" role="listbox" aria-label="Vorschläge" hidden></div>
+            <input
+              class="capture__input"
+              id="captureInput"
+              type="text"
+              placeholder="Was ist reingekommen?  z. B.  Switch tauschen @muendlich #netzwerk ! >morgen"
+              aria-label="Neue Aufgabe"
+              aria-describedby="captureHelp"
+              role="combobox"
+              aria-expanded="false"
+              aria-autocomplete="list"
+              aria-controls="captureSuggest"
+              spellcheck="false"
+            />
+          </div>
+          <button class="btn btn--primary capture__submit" id="captureSubmit" type="submit">Erfassen</button>
         </form>
         <div class="capture__preview" id="capturePreview"></div>
         <p class="visually-hidden" id="captureHelp">
           Quelle mit @, Schlagwort mit Raute, Priorität mit Ausrufezeichen, Zieltag mit größer-als.
-          Bei @ und Raute vervollständigt die Tabulatortaste.
+          Bei @ und Raute vervollständigt die Tabulatortaste, Pfeil auf und ab blättern die Vorschläge.
         </p>
       </section>
 
+      <!-- Filterzeile: 34 px, alles in einer Zeile, aktive Filter als Text -->
       <section class="filters" aria-label="Filter">
         <div class="segmented" id="statusFilter" role="group" aria-label="Status-Filter">
           <button type="button" data-status="alle" aria-pressed="false">Alle</button>
@@ -82,20 +107,13 @@
           <button type="button" data-status="erledigt" aria-pressed="false">Erledigt</button>
         </div>
 
-        <label class="filters__label">
-          <span class="visually-hidden">Quelle</span>
-          <select id="sourceFilter" class="field field--slim" aria-label="Quelle"></select>
-        </label>
+        <select id="sourceFilter" class="field field--slim filters__select" aria-label="Quelle"></select>
+        <select id="tagFilter" class="field field--slim filters__select" aria-label="Schlagwort"></select>
 
-        <label class="filters__label">
-          <span class="visually-hidden">Schlagwort</span>
-          <select id="tagFilter" class="field field--slim" aria-label="Schlagwort"></select>
-        </label>
-
-        <div class="filters__active" id="activeFilters" aria-live="polite"></div>
+        <div class="filters__active" id="activeFilters"></div>
 
         <button class="linkbtn filters__reset" id="btnResetFilters" type="button" hidden
-          title="Alle Filter zurücksetzen (Strg + Umschalt + F)">Filter zurücksetzen</button>
+          title="Alle Filter zurücksetzen (Strg + Umschalt + F)">Alles zurücksetzen</button>
 
         <div class="filters__spacer"></div>
 
@@ -104,10 +122,11 @@
 
       <main class="viewroot" id="viewRoot"></main>
 
+      <!-- Statuszeile: 24 px, links die Bestandszahlen, rechts der Speicherzustand -->
       <footer class="statusbar">
-        <span id="statusText"></span>
+        <span class="statusbar__counts" id="statusText"></span>
         <span class="statusbar__spacer"></span>
-        <button class="linkbtn" id="btnQuick" type="button" title="Schnellerfassung öffnen">Schnellerfassung</button>
+        <span class="statusbar__save" id="saveState"></span>
       </footer>
     </div>
 
@@ -118,6 +137,7 @@
     <script src="../shared/parse.js"></script>
     <script src="../shared/export.js"></script>
     <script src="js/util.js"></script>
+    <script src="js/icons.js"></script>
     <script src="js/state.js"></script>
     <script src="js/item.js"></script>
     <script src="js/views.js"></script>

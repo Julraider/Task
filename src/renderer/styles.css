@@ -1,55 +1,156 @@
 /* =========================================================================
-   Tagwerk - Oberflaeche
-   Farben liegen als CSS-Variablen vor; [data-theme] wird vom Renderer gesetzt.
+   Tagwerk - Gestaltung nach docs/design-system.md ("Kursbuch statt Landingpage")
+
+   Aufbau dieser Datei folgt der Reihenfolge aus Abschnitt 10 des Leitfadens:
+   Wertetafel -> Grundlagen -> Skala -> Bedienelemente -> Geruest -> Zonen ->
+   Aufgabenzeile -> Wochentafel -> schwebende Ebenen -> Bewegung -> Breiten ->
+   Druck. Jede Regel traegt den Abschnitt, aus dem ihre Zahlen stammen.
+
+   Grundsatz: Zeilen statt Karten, Haarlinien statt Schatten, ein Akzent,
+   kein Gruen, warmes Papier statt Weiss.
    ========================================================================= */
 
+/* ============================ 1. Wertetafel ============================== */
+/* Beide Themes sind gleichrangig gesetzt, nicht voneinander abgeleitet (§1.1).
+   Zwischentoene gibt es nicht: was hier nicht steht, kommt nicht vor.        */
+
 :root {
-  --bg: #f2f4f8;
-  --surface: #ffffff;
-  --surface-2: #f7f8fb;
-  --border: #e0e4ec;
-  --border-strong: #cdd3df;
-  --text: #191d26;
-  --text-muted: #6a7284;
-  --text-faint: #9aa2b1;
-  --accent: #4759e0;
-  --accent-soft: #e8ebfd;
-  --accent-text: #ffffff;
-  --ok: #1f9254;
-  --ok-soft: #e4f5ec;
-  --warn: #b8760b;
-  --warn-soft: #fdf1dd;
-  --danger: #c2382f;
-  --danger-soft: #fbe9e7;
-  --shadow: 0 1px 2px rgba(20, 25, 40, 0.06), 0 4px 16px rgba(20, 25, 40, 0.06);
-  --shadow-lg: 0 12px 40px rgba(15, 20, 35, 0.22);
-  --radius: 10px;
-  --radius-sm: 7px;
+  color-scheme: light;
+
+  /* Flaechen */
+  --bg:            #F2F0EA;  /* Anwendungsflaeche hinter allem            */
+  --paper:         #FBFAF7;  /* Listen, Kopfzeile, Statuszeile, Dialoge   */
+  --sunken:        #EDEBE4;  /* eingelassen: Eingabefond, Notizen,
+                                Vorschau, Wochenendspalte                 */
+  --hover:         #F4F2EC;  /* Zeilen-Hover                              */
+
+  /* Linien */
+  --hairline:      #E2DFD6;  /* Zeilentrenner, Spaltenlinien              */
+  --line:          #CFCBC0;  /* staerkere Trennung, Dialogkanten          */
+  --line-strong:   #8E897E;  /* Rahmen bedienbarer Elemente (3.34:1)      */
+
+  /* Schrift */
+  --ink:           #1C1A16;  /* Titel, Fliesstext                         */
+  --ink-2:         #56524A;  /* zweite Ebene: Meta, Beschriftungen        */
+  --ink-3:         #726D63;  /* dritte Ebene: leise Angaben, Erledigtes   */
+  --ink-4:         #8E897E;  /* NUR nicht-textliche Glyphen, deaktiviert  */
+
+  /* Akzent: jetzt / aktiv / Fokus / Auswahl */
+  --accent:        #0F5B6E;
+  --accent-on:     #FBFAF7;
+  --accent-quiet:  #DEEAEE;
+  /* Zweite, ausformulierte Hoverfarbe der Hauptaktion (§5.6) - 6 % dunkler.
+     Ausformuliert, weil filter: brightness() im dunklen Theme verfaelscht.  */
+  --accent-hover:  #0E5667;
+
+  /* Signale */
+  --wait:          #7E5206;
+  --wait-quiet:    #F0E7D5;
+  --alert:         #A32B23;
+  --alert-quiet:   #F5E3DF;
+
+  /* Halbton hinter Dialogen (§5.5) - kein backdrop-filter */
+  --scrim:         rgba(21, 20, 18, .40);
+
+  /* Schrift (§2.1) - keine externen Schriften, drei optische Groessen */
+  --font-text:    'Segoe UI Variable Text', 'Segoe UI', -apple-system,
+                  BlinkMacSystemFont, system-ui, 'Noto Sans', 'Liberation Sans',
+                  Arial, sans-serif;
+  --font-display: 'Segoe UI Variable Display', 'Segoe UI Variable Text',
+                  'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui,
+                  'Noto Sans', 'Liberation Sans', Arial, sans-serif;
+  --font-small:   'Segoe UI Variable Small', 'Segoe UI Variable Text',
+                  'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui,
+                  'Noto Sans', 'Liberation Sans', Arial, sans-serif;
+  --font-mono:    'Cascadia Mono', Consolas, ui-monospace, 'SF Mono',
+                  'DejaVu Sans Mono', 'Liberation Mono', monospace;
+
+  /* Abstaende (§3.1) - Grundeinheit 4 px, Halbschritte 2 und 6 */
+  --sp-1:  2px;  --sp-2:  4px;  --sp-3:  6px;  --sp-4:  8px;
+  --sp-5: 12px;  --sp-6: 16px;  --sp-7: 20px;  --sp-8: 24px;  --sp-9: 32px;
+
+  /* Radien (§4.2) - vier Stufen mit klarer Zustaendigkeit, kein 999px */
+  --r-0: 0;
+  --r-1: 3px;
+  --r-2: 6px;
+  --r-3: 8px;
+
+  /* Haarlinie (§4.1) */
+  --hairline-w: 1px;
+
+  /* Schatten (§4.3) - nur fuer wirklich schwebende Ebenen, achsentreu */
+  --shadow-pop:
+    0 1px 2px rgba(28, 26, 22, .10),
+    0 6px 16px -4px rgba(28, 26, 22, .14);
+  --shadow-float:
+    0 2px 4px rgba(28, 26, 22, .10),
+    0 12px 32px -8px rgba(28, 26, 22, .20),
+    0 28px 64px -28px rgba(28, 26, 22, .18);
+
+  /* Bewegung (§6) */
+  --ease-out: cubic-bezier(.2, 0, 0, 1);
+  --ease-in:  cubic-bezier(.4, 0, 1, 1);
+  --d-fast: 120ms;
+  --d-base: 160ms;
+  --d-slow: 200ms;
+
+  /* Feste Masse der Tafel (§3.2, §3.3) */
+  --zone-top:    44px;
+  --zone-capture: 54px;
+  --zone-filter: 34px;
+  --zone-status: 24px;
+  --row-h:       32px;   /* die Aufgabenzeile - das wichtigste Mass der App */
+  --text-edge:   64px;   /* Textkante, gilt in der ganzen App               */
 }
 
 [data-theme='dark'] {
-  --bg: #12141a;
-  --surface: #1b1e26;
-  --surface-2: #21252e;
-  --border: #2b303b;
-  --border-strong: #3a4150;
-  --text: #e7eaf1;
-  --text-muted: #9aa3b3;
-  --text-faint: #6f7889;
-  --accent: #7b8cff;
-  --accent-soft: #262b45;
-  --accent-text: #10121a;
-  --ok: #4cc38a;
-  --ok-soft: #1d2f27;
-  --warn: #e0a94a;
-  --warn-soft: #322a1a;
-  --danger: #f0796d;
-  --danger-soft: #35211f;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 16px rgba(0, 0, 0, 0.25);
-  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.5);
+  color-scheme: dark;
+
+  --bg:            #151412;
+  --paper:         #1C1B18;
+  --sunken:        #232119;
+  --hover:         #252320;
+
+  --hairline:      #2E2C27;
+  --line:          #423F38;
+  --line-strong:   #736E65;
+
+  --ink:           #EDEAE3;
+  --ink-2:         #B0AAA0;
+  --ink-3:         #928D82;
+  --ink-4:         #736E65;
+
+  --accent:        #5FB6C8;
+  --accent-on:     #151412;
+  --accent-quiet:  #17343C;
+  --accent-hover:  #65C1D4;   /* 6 % heller (§5.6) */
+
+  --wait:          #D69A3C;
+  --wait-quiet:    #33291A;
+  --alert:         #E2796B;
+  --alert-quiet:   #37211E;
+
+  --scrim:         rgba(0, 0, 0, .55);
+
+  --shadow-pop:
+    0 1px 2px rgba(0, 0, 0, .40),
+    0 6px 16px -4px rgba(0, 0, 0, .45);
+  --shadow-float:
+    0 2px 4px rgba(0, 0, 0, .45),
+    0 16px 40px -8px rgba(0, 0, 0, .55),
+    0 32px 72px -28px rgba(0, 0, 0, .50);
 }
 
-* {
+/* Auf HiDPI wird die Haarlinie ein echtes Geraetepixel duenn (§4.1). */
+@media (min-resolution: 2dppx) {
+  :root { --hairline-w: 0.5px; }
+}
+
+/* ============================ 2. Grundlagen ============================== */
+
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
@@ -61,13 +162,27 @@ body {
 
 body {
   background: var(--bg);
-  color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI Variable Text', 'Segoe UI', Roboto, 'Helvetica Neue',
-    Arial, sans-serif;
-  font-size: 14px;
-  line-height: 1.45;
-  -webkit-font-smoothing: antialiased;
+  color: var(--ink);
+  font-family: var(--font-text);
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 400;
+  /* Kursbuch-Regel: Zahlenkolonnen fluchten ueberall (§2.2). */
+  font-variant-numeric: tabular-nums;
+  /* -webkit-font-smoothing wird bewusst NICHT gesetzt (§2.1). */
   overflow: hidden;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* Kursiv gibt es nicht (§2.3): Segoe hat keinen echten Schnitt. */
+i, em, cite, address, var { font-style: normal; }
+
+a {
+  color: var(--accent);
+  text-underline-offset: 2px;
 }
 
 button,
@@ -75,1223 +190,1648 @@ input,
 select,
 textarea {
   font: inherit;
+  font-variant-numeric: inherit;
   color: inherit;
+  margin: 0;
+}
+
+button {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+button:disabled,
+input:disabled,
+select:disabled {
+  color: var(--ink-4);
+  cursor: default;
+}
+
+/* Fokus nur bei Tastaturbedienung, 2 px durchgezogen - kein weicher Halo (§4.4). */
+:focus { outline: none; }
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+::selection {
+  background: var(--accent-quiet);
+  color: var(--ink);
+}
+
+/* Rollbalken in Papier und Tinte statt Systemgrau. */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: var(--r-0);
+}
+::-webkit-scrollbar-thumb:hover { background: var(--line-strong); background-clip: content-box; }
+::-webkit-scrollbar-corner { background: transparent; }
+
+/* Inline-SVG (§7): einfarbig, 16-px-Raster, erbt die Textfarbe der Zeile. */
+svg {
+  display: block;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Native Kontrollkaestchen im Akzent statt in Systemblau. */
+input[type='checkbox'],
+input[type='radio'] {
+  accent-color: var(--accent);
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
 }
 
 .visually-hidden {
   position: absolute;
   width: 1px;
   height: 1px;
+  margin: -1px;
+  padding: 0;
   overflow: hidden;
   clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
-/* ------------------------------------------------------------------ Layout */
+/* ========================= 3. Typografische Skala ========================
+   Zehn Stufen, mehr gibt es nicht (§2.2). Jede Stufe steht genau einmal;
+   wer eine elfte braucht, hat das Layout falsch gebaut.                    */
+
+/* t-day 20/24, 600, display, -.01em */
+.day__title {
+  font-family: var(--font-display);
+  font-size: 20px;
+  line-height: 24px;
+  font-weight: 600;
+  letter-spacing: -.01em;
+  margin: 0;
+}
+
+/* t-dialog 16/22, 600, display, -.005em */
+.dialog__head h2 {
+  font-family: var(--font-display);
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 600;
+  letter-spacing: -.005em;
+  margin: 0;
+}
+
+/* t-input 15/20 */
+.capture__input {
+  font-size: 15px;
+  line-height: 20px;
+}
+
+/* t-quick 17/22 */
+.quick__input {
+  font-size: 17px;
+  line-height: 22px;
+}
+
+/* t-body-em 13/18, 600 - Titel dringender Aufgaben, Wochentagsname */
+.week__weekday,
+.item[data-prio='2'] .item__title,
+.mini[data-prio='2'] .mini__title {
+  font-weight: 600;
+}
+
+/* t-meta 12/16 */
+.item__meta,
+.datenav__label,
+.filters,
+.day__stats,
+.day__filtered,
+.capture__preview,
+.week__date,
+.overdue__head,
+.overdue__groupHead,
+.day__footer,
+.bulkbar,
+.dropzone,
+.dialog__field > span,
+.dialog__hint,
+.dialog__info,
+.editor__hint,
+.settings__state,
+.helptable td {
+  font-size: 12px;
+  line-height: 16px;
+}
+
+/* t-micro 11/14, 500, small - Zaehler, Marken, Statuszeile */
+.statusbar,
+.badge,
+.count,
+.day__kw,
+.day__progressText,
+.week__counts,
+.editor__label > span,
+.quick__hint,
+.group__count,
+.overdue__age {
+  font-family: var(--font-small);
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 500;
+}
+
+/* t-label 10.5/12, 600, +.08em, Versalien - genau zwei Orte plus das
+   Heute-Label aus §3.5, das der Leitfaden dort ebenfalls als Versalienlabel
+   fuehrt. Beim letzten Buchstaben wird die Laufweite zurueckgenommen (§2.3). */
+.group__label,
+.dialog__group > h3,
+.pill--today,
+.overdue__toggle {
+  font-family: var(--font-small);
+  font-size: 10.5px;
+  line-height: 12px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  margin-right: -.08em;
+  text-transform: uppercase;
+}
+
+/* t-mono 11.5/16 - Referenzen, Tastenkappen, Pfade, Vorschau */
+.badge--ref,
+kbd,
+code,
+.dialog__path,
+.dialog__preview,
+.empty__hint,
+.field--shortcut,
+.helptable td:first-child code {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 16px;
+  font-weight: 400;
+}
+
+/* ==================== 4. Knoepfe, Felder, Segmente ======================= */
+/* Tabelle §5.6. Hover aendert nur den Fond - ohne Uebergang, ohne Anheben. */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+  height: 26px;
+  padding: 0 var(--sp-5);
+  background: var(--paper);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-1);
+  color: var(--ink);
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.btn:hover:not(:disabled) { background: var(--hover); }
+
+.btn:disabled {
+  color: var(--ink-4);
+  border-color: var(--line);
+  background: var(--paper);
+}
+
+/* Knopf mit Icon und Text: links 8, rechts 12 - optischer Ausgleich (§5.6). */
+.btn:has(svg) { padding-left: var(--sp-4); padding-right: var(--sp-5); }
+
+.btn--primary {
+  padding: 0 14px;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-on);
+}
+
+.btn--primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.btn--primary:disabled {
+  background: var(--sunken);
+  border-color: var(--line);
+  color: var(--ink-4);
+}
+
+/* Still */
+.btn--ghost {
+  padding: 0 var(--sp-5);
+  background: none;
+  border-color: transparent;
+  color: var(--ink-2);
+}
+
+.btn--ghost:hover:not(:disabled) { background: var(--hover); }
+
+/* "Heute" fuehrt zurueck: steht der Blick woanders, wird der Knopf zum Akzent. */
+.btn--ghost.is-highlight { color: var(--accent); }
+
+/* Gefaehrlich */
+.btn--danger,
+.btn--danger-ghost {
+  padding: 0 var(--sp-4);
+  background: none;
+  border-color: transparent;
+  color: var(--alert);
+}
+
+.btn--danger:hover:not(:disabled),
+.btn--danger-ghost:hover:not(:disabled) { background: var(--alert-quiet); }
+
+/* Schmale Fassung fuer Zeilen, die selbst nur 32 px hoch sind. */
+.btn--slim {
+  height: 24px;
+  padding: 0 var(--sp-4);
+}
+
+/* Nur Icon */
+.iconbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-1);
+  background: none;
+  color: var(--ink-2);
+}
+
+.iconbtn:hover:not(:disabled) { background: var(--hover); color: var(--ink); }
+.iconbtn--danger:hover:not(:disabled) { background: var(--alert-quiet); color: var(--alert); }
+.iconbtn:disabled { color: var(--ink-4); background: none; }
+
+/* Chevrons sitzen 0.5 px entgegen der Spitze (§7.6). */
+#btnPrev svg { transform: translateX(.5px); }
+#btnNext svg { transform: translateX(-.5px); }
+
+/* Textknopf - Fussleisten, Zeilen, Hinweise. */
+.linkbtn {
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-2);
+  text-align: left;
+}
+
+.linkbtn:hover:not(:disabled) { color: var(--ink); text-decoration: underline; }
+.linkbtn:disabled { color: var(--ink-4); text-decoration: none; }
+.linkbtn--danger:hover:not(:disabled) { color: var(--alert); }
+
+/* Felder */
+.field,
+.editor__field,
+.editor__title,
+.editor__notes,
+.dialog__field select,
+.dialog__field input {
+  height: 26px;
+  padding: 0 var(--sp-4);
+  background: var(--paper);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-1);
+  color: var(--ink);
+  min-width: 0;
+}
+
+.field:focus-visible,
+.editor__field:focus-visible,
+.editor__title:focus-visible,
+.editor__notes:focus-visible {
+  border-color: var(--accent);
+}
+
+.field--slim {
+  height: 26px;
+  font-size: 12px;
+  line-height: 16px;
+}
+
+/* Auswahlfelder: der Systempfeil weicht einem gezeichneten Chevron, damit
+   Linux, Windows und macOS dieselbe Zeile ergeben. */
+select.field,
+select.editor__field,
+.day__group {
+  appearance: none;
+  padding-right: var(--sp-7);
+  background-image:
+    linear-gradient(45deg, transparent 48%, var(--ink-3) 48% 52%, transparent 52%),
+    linear-gradient(-45deg, transparent 48%, var(--ink-3) 48% 52%, transparent 52%);
+  background-repeat: no-repeat, no-repeat;
+  background-size: 5px 5px, 5px 5px;
+  background-position: right 11px center, right 7.4px center;
+}
+
+select:disabled { background-color: var(--sunken); }
+
+textarea {
+  resize: vertical;
+  line-height: 18px;
+}
+
+/* Tastenkappen und Maschinenschrift-Auszeichnungen. */
+kbd,
+code {
+  padding: 1px var(--sp-3);
+  background: var(--sunken);
+  border: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--r-1);
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+/* Kleine Bausteine, die in mehreren Zonen vorkommen. */
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+}
+
+.row--end { justify-content: flex-end; }
+
+.row__spacer,
+.topbar__spacer,
+.filters__spacer,
+.bulkbar__spacer,
+.statusbar__spacer { flex: 1 1 auto; }
+
+.muted { color: var(--ink-3); }
+
+/* =============================== 5. Geruest ==============================
+   Feste Zonen zusammen 156 px (§3.2). Sie aendern ihre Hoehe nie - unter
+   760 px werden nur die Inhalte knapper (§8).                              */
 
 .app {
   display: grid;
-  grid-template-rows: auto auto auto 1fr auto;
+  grid-template-rows: var(--zone-top) auto var(--zone-filter) 1fr var(--zone-status);
   height: 100vh;
+  background: var(--bg);
 }
 
-/* ----------------------------------------------------------------- Topbar */
+/* ============================ 6. Kopfzeile (§5.1) ======================== */
 
 .topbar {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  gap: var(--sp-4);
+  height: var(--zone-top);
+  padding: 0 var(--sp-6);
+  background: var(--paper);
+  border-bottom: 1px solid var(--line);
+  /* Die Kopfzeile bricht in keinem Fall um und scrollt nie waagerecht (§8). */
+  overflow: hidden;
+}
+
+.topbar__group {
+  gap: var(--sp-4);
+  min-width: 0;
 }
 
 .brand {
   display: flex;
   align-items: center;
-  gap: 7px;
-  font-weight: 650;
-  letter-spacing: 0.2px;
-  margin-right: 4px;
+  gap: var(--sp-3);
+  min-width: 0;
 }
 
+/* Die Wortmarke ist Text, kein farbiges Quadrat mit Buchstabe (§5.1).
+   Davor eine gezeichnete Marke aus drei Strichen (11, 7, 9 px) - ein
+   abstrahierter Fahrplaneintrag. Liefert das Markup ein SVG, weicht sie. */
 .brand__mark {
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
-  background: var(--accent);
-  color: var(--accent-text);
-  font-size: 13px;
-  font-weight: 700;
+  width: 12px;
+  height: 12px;
+  flex: none;
+  font-size: 0;
+  color: var(--accent);
+  background-image:
+    linear-gradient(var(--accent), var(--accent)),
+    linear-gradient(var(--accent), var(--accent)),
+    linear-gradient(var(--accent), var(--accent));
+  background-repeat: no-repeat;
+  background-size: 11px 1.5px, 7px 1.5px, 9px 1.5px;
+  background-position: 0 2.25px, 0 5.25px, 0 8.25px;
 }
 
-.topbar__spacer {
-  flex: 1;
-}
+.brand__mark:has(svg) { background-image: none; }
+.brand__mark svg { width: 12px; height: 12px; }
 
-.tabs {
-  display: flex;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 2px;
-}
-
-.tab {
-  border: 0;
-  background: transparent;
-  padding: 4px 14px;
-  border-radius: 5px;
-  cursor: pointer;
-  color: var(--text-muted);
-  font-weight: 500;
-}
-
-.tab:hover {
-  color: var(--text);
-}
-
-.tab.is-active {
-  background: var(--surface);
-  color: var(--text);
-  box-shadow: var(--shadow);
-}
-
-.datenav {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.datenav__label {
-  margin-left: 6px;
-  color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
+.brand__name {
+  font-weight: 600;
+  letter-spacing: -.005em;
+  color: var(--ink);
   white-space: nowrap;
 }
 
+/* Segmentschalter: aktives Segment traegt Papier und Kontur, keine Fuellung. */
+.tabs,
+.segmented {
+  display: flex;
+  align-items: stretch;
+  height: 26px;
+  padding: 0;
+  background: var(--sunken);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-1);
+  overflow: hidden;
+}
+
+.tabs .tab,
+.segmented button {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--sp-5);
+  border: 0;
+  border-left: var(--hairline-w) solid var(--hairline);
+  background: none;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+.tabs .tab:first-child,
+.segmented button:first-child { border-left: 0; }
+
+.tabs .tab:hover,
+.segmented button:hover { background: var(--hover); color: var(--ink); }
+
+.tabs .tab.is-active,
+.segmented button.is-active,
+.tabs .tab[aria-pressed='true'],
+.segmented button[aria-pressed='true'] {
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: none;
+  outline: 1px solid var(--line);
+  outline-offset: -1px;
+}
+
+.tabs .tab:focus-visible,
+.segmented button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* Datumsnavigation: feste Breite, damit beim Blaettern nichts springt (§5.1). */
+.datenav {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.datenav__label {
+  min-width: 168px;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+/* Suchfeld: eingelassen, Lupe bei x = 8, Textbeginn bei x = 28 (§5.1). */
 .search {
   position: relative;
   display: flex;
   align-items: center;
+  height: 26px;
+  background: var(--sunken);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-1);
 }
+
+.search:focus-within { border-color: var(--accent); }
 
 .search__icon {
   position: absolute;
-  left: 9px;
-  color: var(--text-faint);
+  left: var(--sp-4);
+  display: flex;
+  width: 16px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-4);
   pointer-events: none;
 }
 
 .search input {
-  width: 210px;
-  padding: 6px 10px 6px 26px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-  outline: none;
-}
-
-.search input:focus {
-  border-color: var(--accent);
-  background: var(--surface);
-}
-
-/* ---------------------------------------------------------------- Buttons */
-
-.btn {
-  border: 1px solid var(--border-strong);
-  background: var(--surface);
-  color: var(--text);
-  padding: 6px 13px;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  font-weight: 500;
-}
-
-.btn:hover:not(:disabled) {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.btn:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-
-.btn--primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-text);
-}
-
-.btn--primary:hover {
-  filter: brightness(1.08);
-  color: var(--accent-text);
-}
-
-.btn--ghost {
-  background: transparent;
-  border-color: transparent;
-  color: var(--text-muted);
-}
-
-.btn--ghost:hover {
-  background: var(--surface-2);
-}
-
-/* "Heute" faellt auf, sobald man woanders steht */
-.btn--ghost.is-highlight {
-  color: var(--accent);
-  background: var(--accent-soft);
-}
-
-.btn--danger {
-  border-color: transparent;
-  color: var(--danger);
-  background: transparent;
-  margin-left: auto;
-}
-
-.btn--danger:hover {
-  background: var(--danger-soft);
-  color: var(--danger);
-}
-
-.iconbtn {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
+  width: 200px;
+  height: 100%;
+  padding: 0 var(--sp-4) 0 28px;
+  background: none;
   border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  font-size: 15px;
-  line-height: 1;
+  border-radius: var(--r-1);
+  color: var(--ink);
 }
 
-.iconbtn:hover {
-  background: var(--surface-2);
-  color: var(--text);
-}
+.search input::placeholder { color: var(--ink-3); }
+.search input::-webkit-search-cancel-button { display: none; }
 
-.iconbtn--danger:hover {
-  background: var(--danger-soft);
-  color: var(--danger);
-}
+.topbar__actions { gap: var(--sp-1); }
 
-.linkbtn {
-  border: 0;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  padding: 2px 4px;
-  border-radius: 4px;
-  text-decoration: none;
-}
-
-.linkbtn:hover:not(:disabled) {
-  color: var(--accent);
-  background: var(--accent-soft);
-}
-
-.linkbtn:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-.linkbtn--danger:hover:not(:disabled) {
-  color: var(--danger);
-  background: var(--danger-soft);
-}
-
-.field {
-  padding: 5px 9px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  outline: none;
-}
-
-.field:focus {
-  border-color: var(--accent);
-}
-
-.field--slim {
-  padding: 4px 8px;
-}
-
-/* -------------------------------------------------------------- Erfassung */
+/* ========================= 7. Erfassungszeile (§5.2) ===================== */
 
 .capture {
-  padding: 12px 14px 0;
+  padding: 10px var(--sp-6);
+  background: var(--bg);
 }
 
 .capture__form {
   display: flex;
-  gap: 8px;
+  align-items: center;
+  gap: var(--sp-4);
 }
 
 .capture__input {
-  flex: 1;
-  padding: 11px 14px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius);
-  background: var(--surface);
-  box-shadow: var(--shadow);
-  outline: none;
-  font-size: 15px;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 34px;
+  padding: 0 var(--sp-5);
+  background: var(--paper);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-1);
+  color: var(--ink);
 }
 
-.capture__input:focus {
+.capture__input::placeholder { color: var(--ink-3); }
+
+/* Fokus: Rahmen im Akzent plus Kontur - kein weicher 3-px-Halo (§5.2). */
+.capture__input:focus-visible {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
+/* Der Erfassungsknopf richtet sich nach der Feldhoehe, nicht nach den 26 px
+   der uebrigen Knoepfe: ein 26er neben einem 34er Feld wirkt verrutscht. */
+#captureSubmit { height: 34px; }
+
+/* Erkennungsvorschau ist eine Textzeile, keine Chips (§5.2). */
 .capture__preview {
   display: none;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 8px 2px 0;
-}
-
-.capture__preview.is-visible {
-  display: flex;
-}
-
-.chip {
-  display: inline-flex;
+  height: 20px;
   align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  color: var(--text-muted);
-  font-size: 12px;
+  overflow: hidden;
+  white-space: nowrap;
+  color: var(--ink-2);
+}
+
+.capture__preview.is-visible { display: flex; }
+
+.capture__suggestLabel {
+  color: var(--ink-3);
+  margin-right: var(--sp-3);
+}
+
+/* Sicheres in --ink-2, Geratenes in --ink-3 mit gepunkteter Unterstreichung. */
+.chip {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--ink-2);
   white-space: nowrap;
 }
 
-.chip--source {
-  background: var(--accent-soft);
-  border-color: transparent;
-  color: var(--accent);
-}
-
 .chip.is-muted {
-  background: var(--surface-2);
-  border-color: var(--border);
-  color: var(--text-faint);
+  color: var(--ink-3);
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
 }
 
-.chip--prio {
-  background: var(--warn-soft);
-  border-color: transparent;
-  color: var(--warn);
+/* Trennung durch " · " - das Zeichen setzt die Gestaltung, nicht das Markup. */
+.capture__preview .chip + .chip::before,
+.capture__preview .chip + .chip-suggest::before {
+  content: ' · ';
+  color: var(--ink-3);
 }
 
-.chip--day {
-  background: var(--ok-soft);
-  border-color: transparent;
-  color: var(--ok);
+/* Anklickbares wird beim Ueberfahren rot und durchgestrichen: es verschwindet. */
+button.chip:hover {
+  color: var(--alert);
+  text-decoration: line-through;
 }
 
-.chip--removable {
-  cursor: pointer;
+/* Vorschlaege zum @quelle/#tag: Zeilen 24 px, Treffer im Akzentfond. */
+.chip--suggest {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 var(--sp-3);
+  margin-right: var(--sp-2);
+  border-radius: var(--r-1);
+  color: var(--ink-2);
 }
 
-.chip--removable:hover {
-  border-color: var(--danger);
-  color: var(--danger);
+.chip--suggest:hover { background: var(--hover); color: var(--ink); text-decoration: none; }
+
+.chip--suggest.is-active {
+  background: var(--accent-quiet);
+  color: var(--ink);
+  font-weight: 600;
 }
 
-/* ----------------------------------------------------------------- Filter */
+/* =========================== 8. Filterzeile (§5.3) ======================= */
 
 .filters {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 14px 10px;
+  gap: var(--sp-4);
+  height: var(--zone-filter);
+  padding: 0 var(--sp-6);
+  background: var(--bg);
+  border-bottom: var(--hairline-w) solid var(--hairline);
+  color: var(--ink-2);
+  overflow: hidden;
 }
 
-.filters__spacer {
-  flex: 1;
+.filters__label {
+  display: flex;
+  align-items: center;
+  min-width: 0;
 }
+
+.filters .field--slim { max-width: 200px; }
 
 .filters__active {
   display: flex;
-  gap: 6px;
+  align-items: center;
+  gap: var(--sp-5);
+  min-width: 0;
+  overflow: hidden;
 }
+
+/* Aktive Filter sind Text mit einem Kreuz dahinter, keine farbige Kapsel. */
+.chip--removable {
+  display: inline-flex;
+  align-items: center;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+.chip--removable:hover { color: var(--alert); text-decoration: line-through; }
+
+.filters__reset { color: var(--ink-2); }
 
 .filters__hint {
-  color: var(--text-faint);
-  font-size: 12px;
+  color: var(--ink-4);
+  white-space: nowrap;
 }
 
-.segmented {
-  display: flex;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-  background: var(--surface);
-}
-
-.segmented button {
-  border: 0;
-  background: transparent;
-  padding: 4px 12px;
-  cursor: pointer;
-  color: var(--text-muted);
-  border-right: 1px solid var(--border);
-}
-
-.segmented button:last-child {
-  border-right: 0;
-}
-
-.segmented button:hover {
-  background: var(--surface-2);
-}
-
-.segmented button.is-active {
-  background: var(--accent);
-  color: var(--accent-text);
-}
-
-/* --------------------------------------------------------------- Viewroot */
+/* ======================== 9. Ansichtsbereich (§3.2) ====================== */
 
 .viewroot {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: var(--sp-5) var(--sp-6) var(--sp-8);
+  background: var(--paper);
   overflow-y: auto;
-  padding: 0 14px 20px;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
 }
 
-/* ------------------------------------------------------------ Tagesansicht */
+.day,
+.week {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* --------------------------- Tageskopf (§3.5) ---------------------------- */
 
 .day__header {
   display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 4px 2px 12px;
-  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-5);
+  min-height: 40px;
+  margin-bottom: var(--sp-2);
 }
 
 .day__heading {
   display: flex;
   align-items: baseline;
-  gap: 10px;
+  gap: var(--sp-4);
+  min-width: 0;
 }
 
 .day__title {
-  margin: 0;
-  font-size: 19px;
-  font-weight: 640;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.day__kw {
-  color: var(--text-faint);
-  font-size: 12px;
+.day__kw { color: var(--ink-3); }
+
+/* Kein Etikett, sondern ein Versalienlabel im Akzent (§3.5). */
+.pill,
+.pill--today,
+.pill--overdue {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
 }
 
-.pill {
-  padding: 1px 9px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.3px;
-  text-transform: uppercase;
-}
+.pill--today { color: var(--accent); }
+.pill--overdue { color: var(--ink-2); }
 
-.pill--today {
-  background: var(--accent);
-  color: var(--accent-text);
-}
+.day__filtered { color: var(--ink-3); }
 
 .day__stats {
   display: flex;
   align-items: center;
-  gap: 14px;
-  color: var(--text-muted);
-  font-size: 13px;
+  gap: var(--sp-5);
+  margin-left: auto;
+  color: var(--ink-2);
+  white-space: nowrap;
 }
 
-.stat strong {
-  color: var(--text);
-  font-variant-numeric: tabular-nums;
+.stat { color: var(--ink-2); }
+.stat strong { font-weight: 600; }
+/* Erledigtes wird leiser, nicht bunter (§0.4). */
+.stat--erledigt { color: var(--ink-3); }
+
+/* Trennung der Bestandszahlen als Gestaltung, nicht als Markup. */
+.stat + .stat::before {
+  content: '· ';
+  color: var(--ink-3);
 }
 
-.stat--erledigt strong {
-  color: var(--ok);
+.day__progress {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
 }
 
+/* Fortschritt: 72 x 3 px, eckig, Fuellung in Graphit - kein gruener Balken. */
 .bar {
-  display: inline-block;
-  width: 90px;
-  height: 6px;
-  border-radius: 999px;
-  background: var(--border);
+  display: block;
+  width: 72px;
+  height: 3px;
+  background: var(--hairline);
+  border-radius: var(--r-0);
   overflow: hidden;
-  vertical-align: middle;
 }
 
 .bar__fill {
   display: block;
   height: 100%;
-  background: var(--ok);
-  transition: width 0.2s ease;
+  background: var(--ink-2);
+  transition: width var(--d-slow) var(--ease-out);
 }
 
-.day__list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-height: 80px;
-  border-radius: var(--radius);
-  transition: background 0.12s ease;
+.day__progressText { color: var(--ink-3); }
+
+.day__group {
+  height: 24px;
+  font-size: 12px;
+  line-height: 16px;
 }
 
-.day__list.is-dropTarget {
-  background: var(--accent-soft);
-  outline: 2px dashed var(--accent);
-  outline-offset: 4px;
-}
+/* ------------------------ Gruppenueberschrift (§3.6) --------------------- */
 
-.day__footer {
+.group + .group { margin-top: var(--sp-3); }
+
+.group__head {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 14px 2px 0;
-  font-size: 13px;
-  color: var(--text-faint);
+  height: 22px;
+  padding-left: var(--sp-4);
+  /* Die durchlaufende Linie ist der klassische Kursbuch-Zwischentitel; die
+     beiden Beschriftungen decken sie mit dem Papierfond ab.                */
+  background-image: linear-gradient(var(--hairline), var(--hairline));
+  background-repeat: no-repeat;
+  background-size: 100% var(--hairline-w);
+  background-position: 0 50%;
+  /* Trennzeichen aus dem Markup verschwinden lassen - die Linie trennt. */
+  font-size: 0;
 }
 
-.day__footerInfo {
+.group__label {
+  padding-right: var(--sp-3);
+  background: var(--paper);
+  color: var(--ink-3);
+}
+
+.group__count {
   margin-left: auto;
+  padding-left: var(--sp-3);
+  background: var(--paper);
+  color: var(--ink-4);
 }
 
-/* ------------------------------------------------------------------ Karte */
+.group__list { display: block; }
+
+/* ===================== 10. Die Aufgabenzeile (§3.3) ======================
+   Eine Aufgabe belegt genau 32 px: kein Aussenabstand, kein Radius, kein
+   Schatten, kein gap. Getrennt wird durch eine Haarlinie an der Unterkante.
+
+   0      8              32   40      56       64
+   |Rand |  Status 24   | 8 | Quelle | 8 | Titel ...        Marken |
+   -------------------------------------------------------------------- */
+
+.day__list {
+  display: block;
+  min-height: 60px;
+}
+
+/* Ablageziel: nur der Fond wechselt, keine gestrichelte Kontur (§3.7). */
+.day__list.is-dropTarget,
+.week__list.is-dropTarget {
+  background: var(--accent-quiet);
+  transition: background-color 100ms var(--ease-out);
+}
 
 .item {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  overflow: hidden;
+  position: relative;
+  display: block;
+  background: var(--paper);
+  border-bottom: var(--hairline-w) solid var(--hairline);
+  border-radius: var(--r-0);
 }
 
-.item.is-dragging {
-  opacity: 0.4;
+.item.is-dragging { opacity: .45; }
+
+/* Prioritaet ist ein Randstrich links, kein farbiges Etikett (§1.3). */
+.item[data-prio='1']::before,
+.item[data-prio='2']::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: var(--alert);
 }
 
-.item[data-prio='1'] {
-  border-left: 3px solid var(--warn);
-}
-
-.item[data-prio='2'] {
-  border-left: 3px solid var(--danger);
-}
+.item[data-prio='1']::before { width: 2px; }
+.item[data-prio='2']::before { width: 3px; }
 
 .item__head {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 9px 10px;
-  cursor: pointer;
-}
-
-.item__head:hover {
-  background: var(--surface-2);
-}
-
-.item__status {
-  flex: none;
-  width: 26px;
-  height: 26px;
-  border: 1px solid var(--border-strong);
-  border-radius: 50%;
-  background: var(--surface);
-  color: var(--text-muted);
-  cursor: pointer;
-  font-size: 13px;
-  line-height: 1;
+  position: relative;
   display: grid;
-  place-items: center;
+  grid-template-columns: 24px 16px minmax(0, 1fr);
+  align-items: center;
+  column-gap: var(--sp-4);
+  min-height: var(--row-h);
+  padding-left: var(--sp-4);
+  padding-right: var(--sp-3);
+  background: var(--paper);
 }
 
-.item__status:hover {
-  border-color: var(--accent);
-  color: var(--accent);
+.item__head:hover { background: var(--hover); }
+
+/* Statusknopf: Trefferflaeche 24 x 24, Glyph 16 px optisch mittig (§7.3). */
+.item__status {
+  grid-column: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--r-1);
+  color: var(--ink-4);
 }
 
-.item[data-status='aktiv'] .item__status {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: var(--accent-soft);
-}
+.item__status:hover { color: var(--accent); }
 
-.item[data-status='wartet'] .item__status {
-  border-color: var(--warn);
-  color: var(--warn);
-  background: var(--warn-soft);
-}
+/* Farbe verstaerkt die Form, sie traegt sie nicht (§1.3). */
+.item[data-status='aktiv'] .item__status { color: var(--accent); }
+.item[data-status='wartet'] .item__status { color: var(--wait); }
+.item[data-status='erledigt'] .item__status { color: var(--ink-3); }
 
-.item[data-status='erledigt'] .item__status {
-  border-color: var(--ok);
-  background: var(--ok);
-  color: #fff;
+/* Quellenspalte: 16 px an fester x-Position, Icon erbt die Textfarbe.
+   Alles, was nicht Status, Rumpf oder Aktionen ist, faellt hier hinein. */
+.item__source,
+.item__icon,
+.item__head > svg,
+.item__head > .icon {
+  grid-column: 2;
+  width: 16px;
+  height: 16px;
+  color: var(--ink-3);
+  /* Optische Mitte: Icons neben 13-px-Text sitzen 0.5 px tiefer (§7.6). */
+  transform: translateY(.5px);
 }
 
 .item__body {
-  flex: 1;
+  grid-column: 3;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   min-width: 0;
 }
 
 .item__titleRow {
   display: flex;
   align-items: baseline;
-  gap: 8px;
-  flex-wrap: wrap;
+  gap: var(--sp-4);
+  min-width: 0;
+  min-height: var(--row-h);
 }
 
 .item__title {
-  font-weight: 500;
-  word-break: break-word;
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
+/* Erledigtes rutscht in Graphit und wird durchgestrichen (§0.4). */
 .item[data-status='erledigt'] .item__title {
+  color: var(--ink-3);
   text-decoration: line-through;
-  color: var(--text-faint);
+  text-decoration-thickness: 1px;
+  transition: color var(--d-fast) var(--ease-out);
 }
 
+/* Marken sind Text, keine Kapseln (§9). */
 .item__badges {
-  display: inline-flex;
-  gap: 5px;
-  flex-wrap: wrap;
-}
-
-.badge {
-  font-size: 11px;
-  padding: 1px 7px;
-  border-radius: 999px;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  color: var(--text-muted);
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-4);
+  flex: none;
   white-space: nowrap;
 }
 
-.badge--tag {
-  cursor: pointer;
+.badge {
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-0);
+  background: none;
+  color: var(--ink-3);
 }
 
-.badge--tag:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-}
+.badge--tag:hover { color: var(--accent); text-decoration: underline; }
+.badge--ref { color: var(--ink-3); }
 
-.badge--ref {
-  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
-  font-size: 10.5px;
-  background: var(--accent-soft);
-  border-color: transparent;
-  color: var(--accent);
-}
-
-.badge--prio1 {
-  background: var(--warn-soft);
-  border-color: transparent;
-  color: var(--warn);
-  font-weight: 700;
-}
-
+/* Der Unterschied hoch/dringend laeuft ueber Zeichen, nicht ueber zwei Rot. */
+.badge--prio,
+.badge--prio1,
 .badge--prio2 {
-  background: var(--danger-soft);
-  border-color: transparent;
-  color: var(--danger);
-  font-weight: 700;
+  color: var(--alert);
+  font-weight: 600;
 }
 
-.item__meta {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-top: 3px;
-  color: var(--text-faint);
-  font-size: 12px;
-}
-
-.meta__done {
-  color: var(--ok);
-}
-
+/* Aktionen ueberlagern die Marken und erscheinen ohne Bewegung (§3.3). */
 .item__actions {
+  position: absolute;
+  top: 0;
+  right: var(--sp-3);
   display: flex;
-  gap: 2px;
+  align-items: center;
+  height: var(--row-h);
+  padding-left: var(--sp-4);
+  /* Fond der Zeile uebernehmen, damit die Marken sauber verdeckt werden. */
+  background-color: inherit;
   opacity: 0;
-  transition: opacity 0.12s ease;
+  pointer-events: none;
 }
 
 .item:hover .item__actions,
-.item.is-expanded .item__actions {
+.item.is-expanded .item__actions,
+.item:focus-within .item__actions {
   opacity: 1;
+  pointer-events: auto;
 }
 
+.item__actions .iconbtn {
+  width: 24px;
+  height: 24px;
+}
+
+/* Metazeile gehoert in den aufgeklappten Zustand (§5.4) - eine Zeile bleibt
+   eine Zeile.                                                             */
+.item__meta { display: none; }
+
+.item.is-expanded .item__meta,
+.item.is-editing .item__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--sp-2);
+  padding-bottom: var(--sp-3);
+  color: var(--ink-3);
+}
+
+.item__meta > * + *::before {
+  content: '· ';
+  color: var(--ink-4);
+}
+
+.meta__done { color: var(--ink-3); }
+
+/* Tastatur-Cursor: Kontur innen, damit die Zeilenhoehe erhalten bleibt. */
+.item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.item:focus-visible .item__head,
+.item.is-focused > .item__head { background: var(--hover); }
+
+/* Auswahl: Fond im Akzent, dazu ein Haken im Bundsteg. Der Steg waechst auf
+   20 px, die Spalten wandern mit - die Verschiebung macht die Auswahl auch
+   ohne Farbe erkennbar (§4.4).                                            */
+.item.is-selected > .item__head,
+.item.is-selected:focus-visible > .item__head { background: var(--accent-quiet); }
+
+.item.is-selected > .item__head { padding-left: var(--sp-7); }
+
+.item.is-selected::after {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: 12px;
+  width: 9px;
+  height: 5px;
+  border-left: 2px solid var(--accent);
+  border-bottom: 2px solid var(--accent);
+  transform: rotate(-45deg);
+}
+
+/* ------------------- Aufgeklappt: Details und Editor (§5.4) -------------- */
+
 .item__details {
-  padding: 0 12px 10px 46px;
+  margin-left: var(--text-edge);
+  padding: var(--sp-3) var(--sp-6) 10px 0;
 }
 
 .item__notes {
   margin: 0;
-  padding: 8px 10px;
-  background: var(--surface-2);
-  border-radius: var(--radius-sm);
-  color: var(--text-muted);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--sunken);
+  border-radius: var(--r-1);
+  /* Auf --sunken ist --ink-3 verboten (§1.2). */
+  color: var(--ink-2);
   white-space: pre-wrap;
-  font-size: 13px;
 }
-
-/* ----------------------------------------------------------------- Editor */
 
 .editor {
+  margin-left: var(--text-edge);
+  padding: var(--sp-3) var(--sp-6) 10px 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 10px 12px 12px;
-  border-top: 1px solid var(--border);
-  background: var(--surface-2);
+  gap: var(--sp-3);
 }
 
-.editor__title,
+.editor__title { height: 26px; }
+
 .editor__notes {
-  width: 100%;
-  padding: 8px 10px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  outline: none;
-  resize: vertical;
-}
-
-.editor__title:focus,
-.editor__notes:focus,
-.editor__field:focus {
-  border-color: var(--accent);
-}
-
-.editor__title {
-  font-weight: 500;
+  height: auto;
+  min-height: 54px;
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--sunken);
+  color: var(--ink-2);
 }
 
 .editor__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--sp-3) var(--sp-4);
 }
 
 .editor__label,
 .dialog__field {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  font-size: 12px;
-  color: var(--text-muted);
+  gap: var(--sp-1);
+  min-width: 0;
 }
 
-.editor__field {
-  padding: 5px 8px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  outline: none;
-}
+.editor__label > span { color: var(--ink-3); }
 
 .editor__buttons {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--sp-4);
+  padding-top: var(--sp-1);
 }
 
 .editor__hint {
-  color: var(--text-faint);
-  font-size: 12px;
+  color: var(--ink-3);
+  margin-left: auto;
+  margin-right: auto;
 }
 
-/* --------------------------------------------------------------- Ueberfaellig */
+/* --------------------- Liegengebliebenes (§3.3, §3.6) -------------------- */
 
-.overdue {
-  margin-bottom: 12px;
-  border: 1px dashed var(--border-strong);
-  border-radius: var(--radius);
-  background: var(--surface-2);
-}
+.overdue { margin-bottom: var(--sp-4); }
 
 .overdue__head {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 6px 10px;
+  gap: var(--sp-5);
+  height: 22px;
+  padding-left: var(--sp-4);
+  color: var(--ink-3);
 }
 
 .overdue__toggle {
+  padding: 0;
   border: 0;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  font-weight: 500;
-  padding: 2px 0;
+  background: none;
+  color: var(--ink-3);
 }
 
-.overdue__toggle:hover {
-  color: var(--text);
-}
+.overdue__toggle:hover { color: var(--ink); }
+.overdue__span { color: var(--ink-3); }
+.overdue__head .linkbtn { margin-left: auto; }
 
-.overdue__list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 0 10px 10px;
-}
+.overdue__list { display: block; }
 
-.overdue__row {
+.overdue__group + .overdue__group { margin-top: var(--sp-1); }
+
+/* Die Datumsspalte der Liegengebliebenen steht links vor dem Randstrich; im
+   jetzigen Markup fasst sie die Zeilen eines Tages zusammen.               */
+.overdue__groupHead {
   display: flex;
   align-items: center;
-  gap: 8px;
-}
-
-.overdue__row .item {
-  flex: 1;
-  min-width: 0;
+  gap: var(--sp-4);
+  height: 22px;
+  padding-left: var(--sp-4);
+  color: var(--ink-3);
 }
 
 .overdue__date {
-  flex: none;
-  width: 46px;
-  color: var(--text-faint);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
+  min-width: 48px;
+  color: var(--ink-2);
 }
 
-/* ----------------------------------------------------------- Wochenansicht */
+.overdue__age { color: var(--ink-3); }
+.overdue__groupHead .linkbtn { color: var(--ink-3); }
+.overdue__groupList { display: block; }
 
-.week__grid {
-  display: grid;
-  grid-template-columns: repeat(var(--cols, 5), minmax(0, 1fr));
-  gap: 10px;
-  align-items: stretch; /* alle Spalten gleich hoch - die "+"-Zeile fluchtet */
+.overdue__more {
+  display: block;
+  padding: var(--sp-3) 0 var(--sp-3) var(--text-edge);
+  color: var(--ink-2);
 }
 
-.week__grid[data-cols='7'] {
-  --cols: 7;
-}
+/* --------------------------- Fusszeile der Ansicht ---------------------- */
 
-.week__col {
-  display: flex;
-  flex-direction: column;
-  min-height: 220px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  overflow: hidden;
-}
-
-.week__col.is-today {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent);
-}
-
-.week__col.is-weekend {
-  background: var(--surface-2);
-}
-
-.week__colHead {
+.day__footer {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 7px 9px;
-  border-bottom: 1px solid var(--border);
+  gap: var(--sp-5);
+  min-height: var(--row-h);
+  margin-top: var(--sp-5);
+  padding-top: var(--sp-3);
+  border-top: var(--hairline-w) solid var(--hairline);
+  color: var(--ink-3);
 }
 
-.week__dayBtn {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-  padding: 0;
-  color: var(--text);
-}
-
-.week__dayBtn:hover .week__weekday {
-  color: var(--accent);
-}
-
-.week__weekday {
-  font-weight: 640;
-}
-
-.week__date {
-  color: var(--text-faint);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-}
-
-.week__counts {
-  display: flex;
-  gap: 4px;
-}
-
-.count {
-  min-width: 18px;
-  padding: 0 5px;
-  border-radius: 999px;
-  font-size: 11px;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-}
-
-.count--open {
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-
-.count--done {
-  background: var(--ok-soft);
-  color: var(--ok);
-}
-
-.week__list {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 7px;
-  min-height: 60px;
-}
-
-.week__list.is-dropTarget {
-  background: var(--accent-soft);
-  outline: 2px dashed var(--accent);
-  outline-offset: -4px;
-}
-
-.week__empty {
-  color: var(--text-faint);
-  text-align: center;
-  padding: 6px 0;
-}
-
-.week__add {
-  border: 0;
-  border-top: 1px solid var(--border);
-  background: transparent;
-  color: var(--text-faint);
-  cursor: pointer;
-  padding: 5px;
-  font-size: 15px;
-}
-
-.week__add:hover {
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-
-.mini {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  padding: 5px 7px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  cursor: pointer;
-  font-size: 12.5px;
-}
-
-.mini:hover {
-  border-color: var(--accent);
-}
-
-.mini.is-dragging {
-  opacity: 0.4;
-}
-
-.mini[data-prio='1'] {
-  border-left: 3px solid var(--warn);
-}
-
-.mini[data-prio='2'] {
-  border-left: 3px solid var(--danger);
-}
-
-.mini__status {
-  flex: none;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-  color: var(--text-muted);
-  padding: 0;
-  line-height: 1.3;
-}
-
-.mini[data-status='erledigt'] .mini__status {
-  color: var(--ok);
-}
-
-.mini[data-status='aktiv'] .mini__status {
-  color: var(--accent);
-}
-
-.mini[data-status='wartet'] .mini__status {
-  color: var(--warn);
-}
-
-.mini__title {
-  flex: 1;
-  min-width: 0;
+.day__footerInfo {
+  margin-left: auto;
+  color: var(--ink-4);
+  white-space: nowrap;
   overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  word-break: break-word;
+  text-overflow: ellipsis;
 }
 
-.mini[data-status='erledigt'] .mini__title {
-  text-decoration: line-through;
-  color: var(--text-faint);
+/* --------------------------- Massenauswahl ------------------------------ */
+
+.bulkbar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  min-height: var(--row-h);
+  margin-bottom: var(--sp-2);
+  padding: 0 var(--sp-3) 0 var(--sp-4);
+  background: var(--accent-quiet);
+  color: var(--ink);
 }
 
-.mini__prio {
-  color: var(--warn);
-  font-weight: 700;
+.bulkbar__count { color: var(--ink); }
+
+/* --------------------------- Ablagezonen (Ziehen) ----------------------- */
+
+.dropzones {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  gap: var(--sp-2);
+  margin-top: var(--sp-4);
+  padding-top: var(--sp-2);
+  background: var(--paper);
 }
 
-/* ------------------------------------------------------------------ Leerer Zustand */
+.dropzone {
+  flex: 1 1 0;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  height: var(--row-h);
+  padding: 0 var(--sp-4);
+  background: var(--sunken);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-1);
+  color: var(--ink-2);
+}
+
+.dropzone.is-dropTarget {
+  background: var(--accent-quiet);
+  border-color: var(--accent);
+  color: var(--ink);
+  transition: background-color 100ms var(--ease-out);
+}
+
+.dropzone__date { margin-left: auto; color: var(--ink-3); }
+
+/* ----------------------------- Leerer Zustand (§5.9) -------------------- */
 
 .empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  padding: 40px 0;
-  color: var(--text-faint);
+  padding: var(--sp-8) 0 0 var(--text-edge);
 }
 
 .empty p {
   margin: 0;
+  color: var(--ink-3);
 }
 
-/* -------------------------------------------------------------- Statusbar */
+.empty__hint { margin-top: var(--sp-2); color: var(--ink-3); }
+.empty .btn { margin-top: var(--sp-5); }
+
+/* ======================= 11. Wochenansicht (§3.7) ========================
+   Eine Tafel, kein Kartenraster: gap 0, Spalten durch Haarlinien getrennt. */
+
+.week__grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(96px, 1fr));
+  gap: 0;
+  flex: 1 1 auto;
+  min-height: 0;
+  align-items: stretch;
+  border-top: var(--hairline-w) solid var(--hairline);
+}
+
+.week__grid[data-cols='5'] { grid-template-columns: repeat(5, minmax(96px, 1fr)); }
+.week__grid[data-cols='6'] { grid-template-columns: repeat(6, minmax(96px, 1fr)); }
+.week__grid[data-cols='7'] { grid-template-columns: repeat(7, minmax(96px, 1fr)); }
+
+.week__col {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-left: var(--hairline-w) solid var(--hairline);
+}
+
+.week__col:first-child { border-left: 0; }
+
+/* Wochenende: nur die Flaeche wechselt, keine weitere Kennzeichnung. */
+.week__col.is-weekend { background: var(--sunken); }
+
+.week__colHead {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  height: var(--row-h);
+  padding: 0 var(--sp-3);
+  border-bottom: 1px solid var(--line);
+}
+
+/* Heute: 2 px Unterstrich statt Rahmen ringsum (§3.7). */
+.week__col.is-today .week__colHead::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: var(--accent);
+}
+
+.week__col.is-today .week__date { color: var(--accent); }
+
+.week__dayBtn {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  min-width: 0;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--ink);
+}
+
+.week__dayBtn:hover .week__weekday { text-decoration: underline; }
+
+.week__weekday { color: var(--ink); }
+.week__date { color: var(--ink-3); }
+
+.week__counts {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  margin-left: auto;
+}
+
+.count { color: var(--ink-2); }
+.count--open { color: var(--ink-2); }
+/* Erledigtes tritt zurueck; ueberfaellig traegt der Text der Zeile, nicht Farbe. */
+.count--done { color: var(--ink-4); }
+
+.count--open + .count--done::before {
+  content: '·';
+  margin-right: var(--sp-2);
+  color: var(--ink-4);
+}
+
+/* Tagessumme: derselbe 3-px-Balken wie im Tageskopf, ueber die Spaltenbreite. */
+.week__sum {
+  height: 3px;
+  background: var(--hairline);
+  border-bottom: var(--hairline-w) solid var(--hairline);
+}
+
+.week__sum .bar { width: 100%; height: 3px; background: none; }
+.week__sum--empty { background: none; }
+
+.week__list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.week__empty {
+  height: 26px;
+  padding: var(--sp-2) var(--sp-3);
+  color: var(--ink-4);
+}
+
+/* Die "+"-Zeile fluchtet in allen Spalten (§3.7). */
+.week__add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--zone-status);
+  margin-top: auto;
+  border: 0;
+  border-top: var(--hairline-w) solid var(--hairline);
+  background: none;
+  color: var(--ink-4);
+}
+
+.week__add:hover { background: var(--hover); color: var(--ink-2); }
+
+/* Minizeile: 26 px bei einzeiligem Titel, hoechstens zwei Zeilen (§3.7). */
+.mini {
+  position: relative;
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: var(--sp-3);
+  min-height: 26px;
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: var(--hairline-w) solid var(--hairline);
+  background: none;
+}
+
+.mini:hover { background: var(--hover); }
+.mini.is-dragging { opacity: .45; }
+
+.mini:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.mini.is-focused { background: var(--hover); }
+
+.mini[data-prio='1']::before,
+.mini[data-prio='2']::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: var(--alert);
+}
+
+.mini[data-prio='1']::before { width: 2px; }
+.mini[data-prio='2']::before { width: 3px; }
+
+.mini__status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-4);
+  font-size: 11px;
+  line-height: 12px;
+}
+
+.mini__status svg { width: 12px; height: 12px; }
+
+.mini[data-status='aktiv'] .mini__status { color: var(--accent); }
+.mini[data-status='wartet'] .mini__status { color: var(--wait); }
+.mini[data-status='erledigt'] .mini__status { color: var(--ink-3); }
+
+.mini__title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.mini[data-status='erledigt'] .mini__title {
+  color: var(--ink-3);
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+
+.mini__prio {
+  align-self: start;
+  color: var(--alert);
+  font-weight: 600;
+}
+
+/* ============================ 12. Statuszeile (§5.7) ==================== */
 
 .statusbar {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 6px 14px;
-  border-top: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text-faint);
-  font-size: 12px;
+  gap: var(--sp-5);
+  height: var(--zone-status);
+  padding: 0 var(--sp-6);
+  background: var(--paper);
+  border-top: 1px solid var(--line);
+  color: var(--ink-3);
+  white-space: nowrap;
+  overflow: hidden;
 }
 
-.statusbar__spacer {
-  flex: 1;
+.statusbar .linkbtn {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  color: var(--ink-3);
 }
 
-/* ----------------------------------------------------------------- Toasts */
+.statusbar .linkbtn:hover { color: var(--ink); }
 
-.toasts {
-  position: fixed;
-  right: 16px;
-  bottom: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  z-index: 50;
-}
+/* Farbe nur bei einem echten Fehler. */
+.statusbar .is-error { color: var(--alert); }
 
-.toast {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 9px 12px;
-  background: var(--surface);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-lg);
-  animation: toast-in 0.16s ease;
-  max-width: 380px;
-}
-
-.toast--error {
-  border-color: var(--danger);
-  color: var(--danger);
-}
-
-.toast--out {
-  opacity: 0;
-  transform: translateY(6px);
-  transition: opacity 0.16s ease, transform 0.16s ease;
-}
-
-.toast__text {
-  flex: 1;
-  word-break: break-word;
-}
-
-.toast__action {
-  border: 0;
-  background: var(--accent-soft);
-  color: var(--accent);
-  padding: 3px 10px;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  font-weight: 550;
-}
-
-.toast__close {
-  border: 0;
-  background: transparent;
-  color: var(--text-faint);
-  cursor: pointer;
-  font-size: 16px;
-  line-height: 1;
-  padding: 0 2px;
-}
-
-@keyframes toast-in {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-}
-
-/* ---------------------------------------------------------------- Dialoge */
+/* =========================== 13. Dialoge (§5.5) ========================== */
 
 .dialog {
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  width: min(560px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
   padding: 0;
-  background: var(--surface);
-  color: var(--text);
-  box-shadow: var(--shadow-lg);
-  width: min(560px, 92vw);
-  max-height: 86vh;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--r-2);
+  box-shadow: var(--shadow-float);
+  color: var(--ink);
+  overflow: hidden;
 }
 
-.dialog--wide {
-  width: min(720px, 94vw);
-}
+.dialog--wide { width: min(760px, calc(100vw - 48px)); }
 
-.dialog::backdrop {
-  background: rgba(10, 12, 20, 0.45);
-}
+/* Halbton statt Weichzeichner - backdrop-filter kommt nicht vor (§5.5). */
+.dialog::backdrop { background: var(--scrim); }
 
 .dialog__inner {
   display: flex;
   flex-direction: column;
-  max-height: 86vh;
+  max-height: calc(100vh - 48px);
 }
 
 .dialog__head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--border);
+  gap: var(--sp-4);
+  height: 44px;
+  padding: 0 var(--sp-5) 0 var(--sp-6);
+  border-bottom: 1px solid var(--line);
+  flex: none;
 }
 
-.dialog__head h2 {
-  margin: 0;
-  font-size: 16px;
-}
+.dialog__head h2 { flex: 1 1 auto; min-width: 0; }
+
+.dialog__head .iconbtn { width: 24px; height: 24px; }
 
 .dialog__body {
-  padding: 6px 14px 14px;
+  padding: var(--sp-6);
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
 }
 
 .dialog__group {
-  padding: 12px 0;
-  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
 }
 
-.dialog__group:last-child {
-  border-bottom: 0;
+/* Gruppen werden wie in der Tagesliste durch Label plus Haarlinie getrennt. */
+.dialog__group > h3 {
+  display: flex;
+  align-items: center;
+  height: 22px;
+  margin: 0;
+  color: var(--ink-3);
+  background-image: linear-gradient(var(--hairline), var(--hairline));
+  background-repeat: no-repeat;
+  background-size: 100% var(--hairline-w);
+  background-position: 0 50%;
 }
 
-.dialog__group h3 {
-  margin: 0 0 8px;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-  color: var(--text-faint);
+.dialog__group > h3::after {
+  content: '';
+  flex: 1 1 auto;
 }
 
-.dialog__field {
-  margin-bottom: 8px;
+.dialog__group > h3 { gap: 0; }
+
+/* Der Text der Gruppenueberschrift deckt die Linie ab. */
+.dialog__group > h3 {
+  padding-right: 0;
 }
+
+.dialog__field > span { color: var(--ink-3); }
 
 .dialog__check {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 3px 0;
-  cursor: pointer;
+  align-items: flex-start;
+  gap: var(--sp-4);
 }
 
+.dialog__check input { margin-top: 2px; }
+.dialog__checkText { min-width: 0; }
+.dialog__checkHint { margin-top: var(--sp-1); }
+
 .dialog__hint {
-  margin: 6px 0 0;
-  color: var(--text-faint);
-  font-size: 12px;
+  margin: 0;
+  color: var(--ink-3);
 }
 
 .dialog__info {
-  padding-top: 12px;
-  color: var(--text-muted);
-  font-size: 12px;
+  color: var(--ink-3);
+  border-top: var(--hairline-w) solid var(--hairline);
+  padding-top: var(--sp-4);
 }
 
 .dialog__path {
-  word-break: break-all;
-  font-family: ui-monospace, Consolas, monospace;
+  color: var(--ink-3);
+  overflow-wrap: anywhere;
 }
 
 .dialog__preview {
   margin: 0;
-  padding: 10px;
-  max-height: 220px;
+  padding: var(--sp-4);
+  max-height: 240px;
   overflow: auto;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
-  font-size: 11.5px;
+  background: var(--sunken);
+  border-radius: var(--r-1);
+  /* Auf --sunken gilt --ink-2 (§1.2). */
+  color: var(--ink-2);
   white-space: pre-wrap;
-  color: var(--text-muted);
+  tab-size: 2;
 }
 
-.field--shortcut {
-  font-family: ui-monospace, Consolas, monospace;
-  cursor: pointer;
-}
-
-.row {
+.dialog__foot {
   display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-6);
+  border-top: 1px solid var(--line);
+  flex: none;
 }
 
-.row--end {
-  justify-content: flex-end;
-  padding-top: 12px;
-}
+.settings__state { color: var(--ink-3); margin: 0; }
+.settings__state.is-ok { color: var(--accent); }
+.settings__state.is-warn { color: var(--wait); }
+.settings__state.is-off { color: var(--ink-3); }
 
-.muted {
-  color: var(--text-faint);
-}
+.field--shortcut { letter-spacing: .02em; }
 
 .helptable {
   width: 100%;
@@ -1299,90 +1839,765 @@ textarea {
 }
 
 .helptable td {
-  padding: 4px 8px 4px 0;
+  padding: var(--sp-2) var(--sp-4) var(--sp-2) 0;
+  border-bottom: var(--hairline-w) solid var(--hairline);
+  color: var(--ink-2);
   vertical-align: top;
-  border-bottom: 1px solid var(--border);
 }
+
+.helptable tr:last-child td { border-bottom: 0; }
 
 .helptable td:first-child {
-  width: 170px;
+  width: 180px;
   white-space: nowrap;
+  color: var(--ink);
 }
 
-.helptable code,
-kbd {
-  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
-  font-size: 11.5px;
-  padding: 1px 6px;
-  border-radius: 5px;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  color: var(--text-muted);
+/* ============================ 14. Toasts (§5.8) ========================= */
+
+.toasts {
+  position: fixed;
+  right: var(--sp-6);
+  bottom: var(--sp-6);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--sp-4);
+  z-index: 20;
+  pointer-events: none;
 }
 
-/* -------------------------------------------------- Schnellerfassung-Fenster */
+.toast {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-5);
+  max-width: 360px;
+  padding: 10px var(--sp-5);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--r-2);
+  box-shadow: var(--shadow-float);
+  color: var(--ink);
+  pointer-events: auto;
+  animation: toast-in var(--d-base) var(--ease-out);
+}
+
+/* Fehler: Randstrich links wie bei der Prioritaet, Text bleibt --ink. */
+.toast--error { border-left: 3px solid var(--alert); }
+
+.toast--out {
+  animation: toast-out var(--d-fast) var(--ease-in) forwards;
+}
+
+.toast__text { flex: 1 1 auto; min-width: 0; }
+
+.toast__action {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+}
+
+.toast__action:hover { text-decoration: underline; }
+
+.toast__close {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--r-1);
+  color: var(--ink-3);
+}
+
+.toast__close:hover { background: var(--hover); color: var(--ink); }
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes toast-out {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(4px); }
+}
+
+/* ==================== 15. Schnellerfassung (§5.10) ======================
+   Das einzige Element, das anders aussehen darf: es schwebt ueber fremden
+   Anwendungen und muss als eigenes Fenster lesbar sein.                   */
 
 .quickbody {
+  height: 100vh;
+  padding: var(--sp-4);            /* Fensterrand fuer den Schatten */
   background: transparent;
   overflow: hidden;
-  padding: 8px;
 }
 
 .quick {
-  border-radius: 14px;
-  background: var(--surface);
-  border: 1px solid var(--border-strong);
-  box-shadow: var(--shadow-lg);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--paper);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-3);
+  box-shadow: var(--shadow-float);
   overflow: hidden;
-  transition: border-color 0.15s ease;
 }
 
-.quick.is-ok {
-  border-color: var(--ok);
+/* Rueckmeldung: 3 px starke Kante links, nicht der ganze Rahmen. */
+.quick::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: transparent;
+  transition: background-color var(--d-slow) var(--ease-in);
 }
 
-.quick.is-error {
-  border-color: var(--danger);
+.quick.is-ok::before {
+  background: var(--accent);
+  transition: background-color var(--d-fast) var(--ease-out);
+}
+
+.quick.is-error::before {
+  background: var(--alert);
+  transition: background-color var(--d-fast) var(--ease-out);
 }
 
 .quick__form {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 14px;
+  gap: var(--sp-5);
+  flex: 1 1 auto;
+  padding: 14px var(--sp-6);
 }
 
 .quick__mark {
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 7px;
-  background: var(--accent);
-  color: var(--accent-text);
-  font-weight: 700;
+  width: 12px;
+  height: 12px;
   flex: none;
+  font-size: 0;
+  color: var(--accent);
+  background-image:
+    linear-gradient(var(--accent), var(--accent)),
+    linear-gradient(var(--accent), var(--accent)),
+    linear-gradient(var(--accent), var(--accent));
+  background-repeat: no-repeat;
+  background-size: 11px 1.5px, 7px 1.5px, 9px 1.5px;
+  background-position: 0 2.25px, 0 5.25px, 0 8.25px;
 }
+
+.quick__mark:has(svg) { background-image: none; }
+.quick__mark svg { width: 12px; height: 12px; }
 
 .quick__input {
-  flex: 1;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0;
+  background: none;
   border: 0;
-  background: transparent;
-  outline: none;
-  font-size: 17px;
+  color: var(--ink);
 }
 
+.quick__input::placeholder { color: var(--ink-3); }
+.quick__input:focus-visible { outline: none; }
+
 .quick__hint {
-  padding: 7px 14px;
-  border-top: 1px solid var(--border);
-  background: var(--surface-2);
-  color: var(--text-faint);
-  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex: none;
+  height: 26px;
+  padding: 0 var(--sp-6);
+  background: var(--sunken);
+  border-top: var(--hairline-w) solid var(--hairline);
+  /* Auf --sunken gilt --ink-2 statt --ink-3 (§1.2). */
+  color: var(--ink-2);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.quick__keys kbd {
-  margin: 0 2px;
+.quick__hint kbd {
+  padding: 0 var(--sp-2);
+  background: var(--paper);
+  border-color: var(--hairline);
+}
+
+.quick__sep { color: var(--ink-3); }
+.quick__keyText { color: var(--ink-2); }
+.quick__msg { color: var(--ink-2); }
+.quick__msg--error { color: var(--alert); }
+.quick__sug { color: var(--ink-2); }
+
+.quick__sug.is-active {
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* ============================ 16. Bewegung (§6) =========================
+   Bewegung zeigt, wo etwas herkommt, und macht Zustandswechsel nachvoll-
+   ziehbar. Hover, Fokus und Ansichtswechsel bewegen sich gar nicht.       */
+
+.item__status svg,
+.mini__status svg {
+  transition: opacity var(--d-fast) var(--ease-out),
+              transform var(--d-fast) var(--ease-out);
+}
+
+/* Wird von der Oberflaeche gesetzt, wenn ein Status gerade umgeschaltet
+   wurde - ohne die Klasse laeuft beim Neuaufbau der Liste nichts an.      */
+.item.is-statuschanged .item__status svg,
+.mini.is-statuschanged .mini__status svg {
+  animation: glyph-in var(--d-fast) var(--ease-out);
+}
+
+@keyframes glyph-in {
+  from { opacity: 0; transform: scale(.86); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.dialog[open] {
+  animation: dialog-in var(--d-base) var(--ease-out);
+}
+
+.dialog[open]::backdrop {
+  animation: fade-in var(--d-base) var(--ease-out);
+}
+
+@keyframes dialog-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Endzustand bleibt identisch, er wird nur sofort erreicht (§6). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ==================== 17. Verhalten ab 760 px (§8) ======================
+   Die Zonenhoehen aendern sich nie; nur Inhalte werden knapper.           */
+
+/* < 1000 px: die Kopfzeile gibt die feste Datumsbreite auf. */
+@media (max-width: 999px) {
+  .datenav__label { min-width: 96px; }
+}
+
+/* < 900 px: Suchfeld 140 px, Textbeschriftungen der Werkzeugknoepfe entfallen. */
+@media (max-width: 899px) {
+  .search input { width: 140px; }
+  .topbar__actions .btn__text { display: none; }
+  .day__footerInfo { display: none; }
+}
+
+/* < 860 px: die Filterzeile darf umbrechen, der Hinweis rechts entfaellt. */
+@media (max-width: 859px) {
+  .filters {
+    height: auto;
+    min-height: 60px;
+    flex-wrap: wrap;
+    padding-top: var(--sp-2);
+    padding-bottom: var(--sp-2);
+  }
+
+  .filters__hint { display: none; }
+  .app { grid-template-rows: var(--zone-top) auto auto 1fr var(--zone-status); }
+}
+
+/* < 820 px: Schlagwortmarken verlassen die Zeile, bleiben aufgeklappt sichtbar. */
+@media (max-width: 819px) {
+  .item:not(.is-expanded) .item__badges .badge--tag { display: none; }
+}
+
+/* <= 760 px: Wochenspalten auf Mindestbreite. */
+@media (max-width: 760px) {
+  .week__grid,
+  .week__grid[data-cols='5'],
+  .week__grid[data-cols='6'],
+  .week__grid[data-cols='7'] {
+    grid-template-columns: repeat(var(--week-cols, 7), minmax(96px, 1fr));
+  }
+
+  .week__grid[data-cols='5'] { --week-cols: 5; }
+  .week__grid[data-cols='6'] { --week-cols: 6; }
+  .week__grid[data-cols='7'] { --week-cols: 7; }
+
+  .mini { padding: var(--sp-2) var(--sp-2); }
+  .week__colHead { padding: 0 var(--sp-2); gap: var(--sp-2); }
+}
+
+/* ============================== 18. Druck ===============================
+   Auf Papier bleibt die Tafel: Zeilen, Haarlinien, keine Bedienelemente.  */
+
+@media print {
+  :root {
+    --paper: #ffffff;
+    --bg: #ffffff;
+    --sunken: #ffffff;
+    --hover: #ffffff;
+    --hairline: #b9b5ab;
+    --line: #8e897e;
+  }
+
+  body { overflow: visible; }
+
+  .app {
+    display: block;
+    height: auto;
+  }
+
+  .topbar,
+  .capture,
+  .filters,
+  .statusbar,
+  .toasts,
+  .dropzones,
+  .bulkbar,
+  .item__actions,
+  .day__footer,
+  .week__add,
+  .overdue__head .linkbtn,
+  .overdue__groupHead .linkbtn,
+  .day__group {
+    display: none !important;
+  }
+
+  .viewroot {
+    display: block;
+    overflow: visible;
+    padding: 0;
+    background: #ffffff;
+  }
+
+  .item,
+  .mini,
+  .group,
+  .week__col {
+    break-inside: avoid;
+    background: #ffffff;
+  }
+
+  .item__head { background: #ffffff; }
+
+  .day__header { border-bottom: 1px solid var(--line); }
+
+  .week__grid { break-inside: auto; }
+
+  /* Der Fortschrittsbalken traegt auf Papier nichts bei. */
+  .bar,
+  .week__sum { display: none; }
+}
+
+/* ========================================================================= */
+/* 12. Tafel-Sprache                                                          */
+/*                                                                            */
+/* item.js und views.js benennen die Bausteine nach dem Leitfaden (Tafel,     */
+/* Tageskopf, Zeile, Marke). Die Abschnitte davor gestalten noch die alten    */
+/* Namen (.item__head, .day__header, .week__grid) und greifen ins Leere; sie  */
+/* bleiben vorerst stehen, bis der Bestand durchgesehen ist.                  */
+/* ========================================================================= */
+
+/* ------------------------------- Tafel ---------------------------------- */
+
+.tafel {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Tageskopf: eine 40-px-Zeile, links das Datum, rechts Bilanz (§3.5). */
+.tageskopf {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-4);
+  height: 40px;
+  padding: 0 var(--sp-4) 0 var(--sp-3);
+  border-bottom: var(--hairline-w) solid var(--line);
+}
+
+.tageskopf__datum {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: .1px;
+  white-space: nowrap;
+}
+
+/* Sprunglabel: Versalien setzt die Gestaltung, nicht der Text (§2.4). */
+.tageskopf__heute {
+  flex: none;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .6px;
+  text-transform: uppercase;
+}
+
+.tageskopf__kw,
+.tageskopf__filter,
+.tageskopf__spanne {
+  flex: none;
+  color: var(--ink-3);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* Steg schiebt alles Weitere an die rechte Kante. */
+.tageskopf__steg { flex: 1 1 auto; }
+
+.tageskopf__bilanz {
+  flex: none;
+  color: var(--ink-2);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.bilanz__offen    { color: var(--ink); font-weight: 600; }
+.bilanz__erledigt { color: var(--ink-3); }
+.bilanz__liegen   { color: var(--wait); }
+
+.tageskopf__gruppierung { flex: none; align-self: center; }
+
+/* Fortschritt ist ein Strich, kein Diagramm (§9: keine Dekoration). */
+.fortschritt {
+  flex: none;
+  align-self: center;
+  width: 64px;
+  height: 3px;
+  background: var(--hairline);
+  overflow: hidden;
+}
+
+.fortschritt__fuellung {
+  display: block;
+  height: 100%;
+  background: var(--ink-3);
+  transition: width var(--d-base) var(--ease-out);
+}
+
+/* Rumpf: alle Zeilen ohne Zwischenraum, zugleich Ablageziel des Tages. */
+.tafel__rumpf {
+  flex: 1 1 auto;
+  min-height: 120px;
+}
+
+.tafel__rumpf.is-dropTarget { background: var(--accent-quiet); }
+
+.tafel__fuss {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-5);
+  padding: var(--sp-4) var(--sp-4) var(--sp-6) var(--sp-3);
+  color: var(--ink-3);
+  font-size: 11px;
+}
+
+.tafel__hinweis { margin-left: auto; }
+.tafel__mehr { color: var(--ink-2); font-size: 11px; }
+
+/* --------------------------- Zwischentitel (§3.6) ----------------------- */
+
+.gruppenkopf {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  height: 22px;
+  padding: 0 var(--sp-4) 0 var(--sp-3);
+  background: var(--bg);
+  border-bottom: var(--hairline-w) solid var(--hairline);
+}
+
+.gruppenkopf__name,
+.gruppenkopf__schalter {
+  flex: none;
+  color: var(--ink-2);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .8px;
+  text-transform: uppercase;
+}
+
+.gruppenkopf__schalter:hover { color: var(--ink); }
+.gruppenkopf__notiz { flex: none; color: var(--ink-3); font-size: 11px; text-transform: none; letter-spacing: 0; }
+
+/* Die Linie laeuft ueber die Restbreite - wie im Kursbuch. */
+.gruppenkopf__linie {
+  flex: 1 1 auto;
+  height: var(--hairline-w);
+  background: var(--hairline);
+}
+
+.gruppenkopf__zahl { flex: none; color: var(--ink-3); font-size: 11px; }
+.gruppenkopf__aktion { flex: none; color: var(--accent); font-size: 11px; }
+
+/* ------------------------- Aufgabenzeile (§3.3) ------------------------- */
+/*
+ * Feste Spalten, in jeder Ansicht an derselben x-Position:
+ *   Bundsteg 0-8 | Status 8-32 | Quelle 40-56 | Titel ab 64 | Marken rechts
+ */
+.item__row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: var(--row-h);
+  padding-right: var(--sp-3);
+  background: var(--paper);
+}
+
+.item__row:hover { background: var(--hover); }
+
+.item__pick {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--sp-4);
+  color: var(--accent);
+}
+
+.item__row > .item__status { flex: none; width: 24px; height: 24px; }
+.item__row > .item__source { flex: none; width: 16px; height: 16px; margin-left: var(--sp-4); }
+
+.item__row > .item__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-left: var(--sp-4);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* --------------------------------- Marken -------------------------------- */
+/* Alles Text, keine Kapseln (§9). */
+
+.item__marks {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-4);
+  margin-left: var(--sp-5);
+  color: var(--ink-3);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.mark--prio  { color: var(--alert); font-weight: 700; }
+.mark--prio1 { color: var(--wait); }
+.mark--tag   { color: var(--ink-3); }
+.mark--tag:hover { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+.mark--ref   { font-family: var(--font-mono); font-size: 10.5px; }
+.mark--day   { color: var(--ink-3); }
+
+/* Die Uhrzeit steht als letzte Spalte und fluchtet ueber alle Zeilen. */
+.mark--time {
+  display: inline-block;
+  width: 34px;
+  text-align: right;
+  color: var(--ink-4);
+}
+
+/* Aktionen erscheinen erst bei Zuwendung - sonst flimmert die Tafel. */
+.item__actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  margin-left: var(--sp-4);
+  opacity: 0;
+}
+
+.item__row:hover .item__actions,
+.item:focus-within .item__actions,
+.item.is-focused .item__actions { opacity: 1; }
+
+.item__act {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  color: var(--ink-3);
+}
+
+.item__act:hover { color: var(--accent); }
+.item__act--danger:hover { color: var(--alert); }
+
+@media (prefers-reduced-motion: reduce) {
+  .item__actions { opacity: 1; }
+}
+
+/* Erledigtes wird leiser, nicht bunter (§0.4). */
+.item[data-status='erledigt'] .item__row > .item__title {
+  color: var(--ink-3);
+  text-decoration: line-through;
+  text-decoration-color: var(--ink-4);
+}
+
+.item.is-selected > .item__row { background: var(--accent-quiet); }
+.item.is-focused  > .item__row { box-shadow: inset 2px 0 0 var(--accent); }
+
+/* Aufgeklappter Bereich fluchtet mit dem Titel (Textkante 64 px). */
+.item__detail {
+  padding: var(--sp-3) var(--sp-4) var(--sp-5) var(--text-edge);
+  background: var(--paper);
+  border-bottom: var(--hairline-w) solid var(--hairline);
+}
+
+.item__detail .item__meta { display: flex; }
+
+.meta__source, .meta__time, .meta__day, .meta__ref { color: var(--ink-3); font-size: 11px; }
+.meta__ref { font-family: var(--font-mono); }
+
+/* --------------------------- Liegengebliebenes --------------------------- */
+
+.liegenzeile { display: flex; align-items: stretch; }
+
+.liegenzeile__datum {
+  flex: none;
+  width: 44px;
+  padding-left: var(--sp-3);
+  color: var(--ink-4);
+  font-size: 11px;
+  line-height: var(--row-h);
+}
+
+.liegenzeile__datum--leer { color: transparent; }
+.liegenzeile > .item { flex: 1 1 auto; min-width: 0; }
+
+/* ------------------------------ Auswahlleiste ---------------------------- */
+
+.auswahlleiste {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  height: 30px;
+  padding: 0 var(--sp-4) 0 var(--sp-3);
+  background: var(--accent-quiet);
+  border-bottom: var(--hairline-w) solid var(--line);
+  font-size: 11px;
+}
+
+.auswahlleiste__zahl { font-weight: 600; }
+.auswahlleiste__steg { flex: 1 1 auto; }
+
+/* ------------------------------- Ablagezonen ----------------------------- */
+/* Erscheinen nur, waehrend gezogen wird. */
+
+.ablagezonen { display: none; }
+
+body.is-draggingItem .ablagezonen {
+  display: flex;
+  gap: var(--sp-4);
+  padding: var(--sp-4) var(--sp-3);
+}
+
+.ablagezone {
+  flex: 1 1 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border: 1px dashed var(--line-strong);
+  color: var(--ink-2);
+  font-size: 11px;
+}
+
+.ablagezone.is-dropTarget { border-color: var(--accent); background: var(--accent-quiet); color: var(--accent); }
+.ablagezone__datum { color: var(--ink-3); }
+
+/* ------------------------------ Wochentafel (§3.7) ----------------------- */
+
+.wochentafel {
+  display: grid;
+  grid-template-columns: repeat(var(--spalten, 5), minmax(0, 1fr));
+  align-items: stretch;
+  border-top: var(--hairline-w) solid var(--hairline);
+}
+
+.wochentafel[data-spalten='7'] { --spalten: 7; }
+
+.wochentafel__spalte {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-right: var(--hairline-w) solid var(--hairline);
+}
+
+.wochentafel__spalte:last-child { border-right: 0; }
+.wochentafel__spalte.is-weekend { background: var(--sunken); }
+.wochentafel__spalte.is-today .spaltenkopf { box-shadow: inset 0 -2px 0 var(--accent); }
+.wochentafel__zeilen.is-dropTarget { background: var(--accent-quiet); }
+
+.spaltenkopf {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+  height: 26px;
+  padding: 0 var(--sp-3);
+  border-bottom: var(--hairline-w) solid var(--line);
+}
+
+.spaltenkopf__tag { display: flex; align-items: baseline; gap: var(--sp-3); }
+.spaltenkopf__wochentag { font-weight: 600; font-size: 12px; }
+.spaltenkopf__datum { color: var(--ink-3); font-size: 11px; }
+.spaltenkopf__zahlen { margin-left: auto; font-size: 11px; }
+
+.zaehler--offen    { color: var(--ink); font-weight: 600; }
+.zaehler--liegen   { color: var(--wait); }
+.zaehler--erledigt { color: var(--ink-3); }
+.zaehler__punkt    { color: var(--ink-4); padding: 0 2px; }
+
+.wochentafel__zeilen { flex: 1 1 auto; min-height: 60px; }
+.wochentafel__leer { padding: var(--sp-4) var(--sp-3); color: var(--ink-4); text-align: center; }
+
+.wochentafel__neu {
+  flex: none;
+  height: 24px;
+  color: var(--ink-4);
+  text-align: center;
+  border-top: var(--hairline-w) solid var(--hairline);
+}
+
+.wochentafel__neu:hover { color: var(--accent); background: var(--hover); }
+
+/* ------------------------------ Leerer Zustand (§5.9) -------------------- */
+
+.leerzeile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-9) var(--sp-4);
+  color: var(--ink-3);
+}
+
+.leerzeile__text { font-size: 13px; }
+
+.leerzeile__taste {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-2);
+  border: var(--hairline-w) solid var(--line);
+  padding: 1px var(--sp-3);
 }

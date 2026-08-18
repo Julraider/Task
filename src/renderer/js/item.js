@@ -1,24 +1,51 @@
 /*
- * Darstellung einer einzelnen Aufgabe - einmal ausfuehrlich (Tagesansicht)
- * und einmal kompakt (Wochenansicht).
+ * Darstellung einer einzelnen Aufgabe.
+ *
+ * Eine Aufgabe ist keine Karte, sondern eine Kursbuchzeile (Leitfaden 3.3):
+ * 32 px hoch, ohne Radius, ohne Schatten, unten eine Haarlinie, und die
+ * Spalten sitzen in jeder Ansicht an derselben x-Position:
+ *
+ *   Randstrich | Bundsteg | Status 24 | Luecke | Quelle 16 | Luecke | Titel … | Marken / Aktionen
+ *   0            0-8        8-32        32-40    40-56       56-64    64 ->     rechts
+ *
+ * Der aufgeklappte Bereich, der Editor und die Notizen fluchten mit dem
+ * Titel (Textkante 64 px). Emoji kommen hier nicht mehr vor - die
+ * Oberflaeche zeichnet ihre Icons ueber `Icons.svg()` (Leitfaden 7).
+ *
+ * Fuer die Wochenansicht gibt es dieselbe Zeile in kompakt (`renderCompact`).
  */
 window.ItemCard = (function () {
   const { h } = Util;
 
   const DRAG_TYPE = 'application/x-tagwerk-item';
 
-  /** Kleine Kennzeichnungen rechts vom Titel. */
-  function badges(item) {
+  /** Trennzeichen der Metazeile - eigener Textknoten, damit Flex nichts schluckt. */
+  const SEP = ' · ';
+
+  // -------------------------------------------------------------- Bausteine
+
+  /**
+   * Marken rechts vom Titel: `!!` · `#tag` · `INC0012345` · Uhrzeit.
+   * Alles Text, keine Kapseln (Leitfaden 9).
+   */
+  function marks(item, options) {
     const out = [];
+
     if (item.priority > 0) {
-      const p = Model.priorityById(item.priority);
-      out.push(h('span', { class: 'badge badge--prio' + item.priority, title: 'Priorität: ' + p.label }, p.icon));
+      const prio = Model.priorityById(item.priority);
+      out.push(
+        h('span', {
+          class: 'mark mark--prio mark--prio' + item.priority,
+          title: 'Priorität: ' + prio.label,
+        }, prio.icon)
+      );
     }
-    if (item.ref) out.push(h('span', { class: 'badge badge--ref', title: 'Referenz' }, item.ref));
+
     for (const tag of item.tags || []) {
       out.push(
         h('button', {
-          class: 'badge badge--tag',
+          class: 'mark mark--tag',
+          type: 'button',
           title: 'Nach #' + tag + ' filtern',
           onclick: (ev) => {
             ev.stopPropagation();
@@ -28,42 +55,98 @@ window.ItemCard = (function () {
         }, '#' + tag)
       );
     }
+
+    if (item.ref) out.push(h('span', { class: 'mark mark--ref', title: 'Referenz' }, item.ref));
+
+    // Steht die Aufgabe an einem anderen Tag, gehoert das Datum dazu - ausser
+    // die Liste zeigt es ohnehin schon in einer eigenen Spalte.
+    if (item.day !== State.get().cursorDay && !(options && options.hideDay)) {
+      out.push(h('span', { class: 'mark mark--day' }, Dates.formatShort(item.day)));
+    }
+
+    // Erledigtes zeigt die Uhrzeit des Abhakens, alles andere die Erfassung.
+    const done = item.status === 'erledigt' && item.doneAt;
+    out.push(
+      h('span', {
+        class: 'mark mark--time',
+        title: (done ? 'Erledigt ' : 'Erfaßt ') + Dates.formatTime(done ? item.doneAt : item.createdAt) + ' Uhr',
+      }, Dates.formatTime(done ? item.doneAt : item.createdAt))
+    );
+
     return out;
   }
 
+  /** Metazeile im aufgeklappten Bereich: Quelle im Klartext, Zeiten, Referenz. */
   function metaLine(item, options) {
     const source = Model.sourceById(item.source);
-    const parts = [
-      h('span', { class: 'meta__source', title: 'Quelle' }, `${source.icon} ${source.label}`),
-      h('span', { class: 'meta__time' }, Dates.formatTime(item.createdAt) + ' Uhr'),
-    ];
-    // Steht die Aufgabe an einem anderen Tag, gehoert das Datum dazu - ausser
-    // die Liste zeigt es ohnehin schon in einer eigenen Spalte.
+    const parts = [h('span', { class: 'meta__source' }, source.label)];
+
+    parts.push(h('span', { class: 'meta__time' }, 'erfaßt ' + Dates.formatTime(item.createdAt) + ' Uhr'));
+
     if (item.day !== State.get().cursorDay && !(options && options.hideDay)) {
       parts.push(h('span', { class: 'meta__day' }, Dates.formatShort(item.day)));
     }
     if (item.status === 'erledigt' && item.doneAt) {
-      parts.push(h('span', { class: 'meta__done' }, '✓ ' + Dates.formatTime(item.doneAt)));
+      parts.push(h('span', { class: 'meta__done' }, 'erledigt ' + Dates.formatTime(item.doneAt) + ' Uhr'));
     }
-    return h('div', { class: 'item__meta' }, parts);
+    if (item.ref) parts.push(h('span', { class: 'meta__ref' }, item.ref));
+
+    // Trennzeichen zwischen die Angaben legen, nicht an ihre Enden.
+    const line = h('div', { class: 'item__meta' });
+    parts.forEach((part, i) => {
+      if (i) line.appendChild(document.createTextNode(SEP));
+      line.appendChild(part);
+    });
+    return line;
   }
 
+  /**
+   * Statusspalte: 24 px Trefferflaeche, Glyph 16 px.
+   * Die Form traegt die Bedeutung, die Farbe verstaerkt sie nur (Leitfaden 1.3).
+   */
   function statusButton(item) {
     const status = Model.statusById(item.status);
+    const next = Model.statusById(Model.nextStatus(item.status));
     return h('button', {
       class: 'item__status',
-      title: `${status.label} - klicken für nächsten Status`,
-      'aria-label': 'Status: ' + status.label,
+      type: 'button',
+      title: 'Weiter zu: ' + next.label,
+      'aria-label': status.label,
       onclick: (ev) => {
         ev.stopPropagation();
         State.cycleStatus(item);
       },
-    }, status.icon);
+    }, Icons.svg(status.iconId));
+  }
+
+  /** Quellenspalte: 16 px Icon, Klarname als `title` (Leitfaden 7.2). */
+  function sourceCell(item) {
+    const source = Model.sourceById(item.source);
+    return h('span', {
+      class: 'item__source',
+      title: source.label,
+      role: 'img',
+      'aria-label': 'Quelle: ' + source.label,
+    }, Icons.svg(source.iconId));
+  }
+
+  /** Ein Aktionsknopf der Zeile - 24 x 24, nur Icon. */
+  function action(iconId, label, onclick, extra) {
+    return h('button', {
+      class: 'item__act' + (extra ? ' ' + extra : ''),
+      type: 'button',
+      title: label,
+      'aria-label': label,
+      onclick: (ev) => {
+        ev.stopPropagation();
+        onclick();
+      },
+    }, Icons.svg(iconId));
   }
 
   /**
-   * Karte zum Ziehen freigeben.
-   * Gehoert die Karte zu einer Mehrfachauswahl, wandert die ganze Auswahl mit.
+   * Zeile zum Ziehen freigeben.
+   * Gehoert sie zu einer Mehrfachauswahl, wandert die ganze Auswahl mit.
    */
   function makeDraggable(node, item) {
     node.draggable = true;
@@ -82,7 +165,7 @@ window.ItemCard = (function () {
     });
   }
 
-  // ------------------------------------------------------------- Ausfuehrlich
+  // ------------------------------------------------------------ Volle Zeile
 
   function render(item, options) {
     const state = State.get();
@@ -101,14 +184,18 @@ window.ItemCard = (function () {
         (focused ? ' is-focused' : '') +
         (isOverdue ? ' is-overdue' : ''),
       dataset: { id: item.id, status: item.status, prio: String(item.priority || 0), fkey: 'item:' + item.id },
-      // Tastaturnavigation: nur die aktuelle Karte liegt im Tab-Lauf,
-      // zwischen den Karten geht es mit den Pfeiltasten weiter.
+      // Tastaturnavigation: nur die aktuelle Zeile liegt im Tab-Lauf,
+      // zwischen den Zeilen geht es mit den Pfeiltasten weiter.
       tabindex: focused ? '0' : '-1',
       'aria-selected': selected ? 'true' : 'false',
     });
 
-    const head = h('div', {
-      class: 'item__head',
+    // Der Bundsteg steht immer im Raster; ausgewaehlt bekommt er den Haken.
+    const pick = h('span', { class: 'item__pick', 'aria-hidden': 'true' });
+    if (selected) pick.appendChild(Icons.svg('auswahl', { size: 12 }));
+
+    const row = h('div', {
+      class: 'item__row',
       // Umschalt-Klick wuerde sonst Text markieren
       onmousedown: (ev) => {
         if (ev.shiftKey) ev.preventDefault();
@@ -129,61 +216,48 @@ window.ItemCard = (function () {
         State.set({ editingId: item.id });
       },
     },
+      pick,
       statusButton(item),
-      h('div', { class: 'item__body' },
-        h('div', { class: 'item__titleRow' },
-          h('span', { class: 'item__title' }, item.title),
-          h('span', { class: 'item__badges' }, badges(item))
-        ),
-        metaLine(item, options)
-      ),
-      h('div', { class: 'item__actions' },
-        h('button', {
-          class: 'iconbtn',
+      sourceCell(item),
+      h('span', { class: 'item__title' }, item.title),
+      h('span', { class: 'item__marks' }, marks(item, options)),
+      h('span', { class: 'item__actions' },
+        action(
+          'weiterschieben',
           // Was schon in der Vergangenheit liegt, gehoert nach vorn geholt -
           // "einen Tag weiter" waere dort immer noch Vergangenheit.
-          title: isOverdue ? 'Auf heute holen' : 'Auf morgen schieben',
-          onclick: (ev) => {
-            ev.stopPropagation();
+          isOverdue ? 'Auf heute holen' : 'Auf morgen schieben',
+          () => {
             const target = isOverdue ? Dates.todayKey() : Dates.addDays(item.day, 1);
             State.move(State.selectionOr(item.id), target);
-          },
-        }, isOverdue ? '⇥' : '→'),
-        h('button', {
-          class: 'iconbtn',
-          title: 'Bearbeiten',
-          onclick: (ev) => {
-            ev.stopPropagation();
-            State.get().expanded.add(item.id);
-            State.set({ editingId: item.id });
-          },
-        }, '✎'),
-        h('button', {
-          class: 'iconbtn iconbtn--danger',
-          title: 'Löschen',
-          onclick: (ev) => {
-            ev.stopPropagation();
-            State.remove(item.id);
-          },
-        }, '🗑')
+          }
+        ),
+        action('bearbeiten', 'Bearbeiten', () => {
+          State.get().expanded.add(item.id);
+          State.set({ editingId: item.id });
+        }),
+        action('loeschen', 'Löschen', () => State.remove(item.id), 'item__act--danger')
       )
     );
 
-    card.appendChild(head);
+    card.appendChild(row);
     makeDraggable(card, item);
 
+    // Aufgeklappt: alles fluchtet mit dem Titel (Textkante 64 px).
     if (expanded && !editing) {
-      const details = h('div', { class: 'item__details' });
+      const details = h('div', { class: 'item__detail' });
       if (item.notes && item.notes.trim()) {
         details.appendChild(h('p', { class: 'item__notes' }, item.notes));
       } else {
         details.appendChild(
           h('button', {
             class: 'linkbtn',
+            type: 'button',
             onclick: () => State.set({ editingId: item.id }),
-          }, '+ Notiz hinzufügen')
+          }, 'Notiz hinzufügen')
         );
       }
+      details.appendChild(metaLine(item, options));
       card.appendChild(details);
     }
 
@@ -241,9 +315,10 @@ window.ItemCard = (function () {
     );
     notesInput.value = values.notes;
 
+    // In einem <option> gibt es kein SVG - hier steht der Klarname allein.
     const sourceSelect = bind(
       h('select', { class: 'editor__field' },
-        ...Model.SOURCES.map((s) => h('option', { value: s.id, selected: s.id === values.source }, `${s.icon} ${s.label}`))
+        ...Model.SOURCES.map((s) => h('option', { value: s.id, selected: s.id === values.source }, s.label))
       ),
       'source'
     );
@@ -353,6 +428,11 @@ window.ItemCard = (function () {
 
   // ---------------------------------------------------------------- Kompakt
 
+  /**
+   * Minizeile der Wochenansicht (Leitfaden 3.7): 26 px, Statusglyph 12 px,
+   * Titel bis zu zwei Zeilen, kein Quellen-Icon - dafuer ist die Spalte zu
+   * schmal. Die Quelle steht im `title`.
+   */
   function renderCompact(item) {
     const source = Model.sourceById(item.source);
     const status = Model.statusById(item.status);
@@ -366,17 +446,25 @@ window.ItemCard = (function () {
       tabindex: focused ? '0' : '-1',
       title:
         `${item.title}\n${source.label} · ${status.label}` +
-        (isOverdue ? '\n⚠ überfällig' : ''),
+        (isOverdue ? ' · überfällig' : ''),
     },
       h('button', {
         class: 'mini__status',
+        type: 'button',
+        title: 'Weiter zu: ' + Model.statusById(Model.nextStatus(item.status)).label,
+        'aria-label': status.label,
         onclick: (ev) => {
           ev.stopPropagation();
           State.cycleStatus(item);
         },
-      }, status.icon),
+      }, Icons.svg(status.iconId, { size: 12 })),
       h('span', { class: 'mini__title' }, item.title),
-      item.priority > 0 ? h('span', { class: 'mini__prio' }, Model.priorityById(item.priority).icon) : null
+      item.priority > 0
+        ? h('span', {
+            class: 'mini__prio mark mark--prio' + item.priority,
+            title: 'Priorität: ' + Model.priorityById(item.priority).label,
+          }, Model.priorityById(item.priority).icon)
+        : null
     );
 
     card.addEventListener('click', () => {
@@ -393,7 +481,7 @@ window.ItemCard = (function () {
    *
    * `dragleave` feuert auch beim Wechsel auf ein Kindelement. Ohne den Blick
    * auf `relatedTarget` flackert die Hervorhebung deshalb, sobald man ueber
-   * eine Karte innerhalb der Liste zieht.
+   * eine Zeile innerhalb der Liste zieht.
    */
   function makeDropTarget(node, dayKey) {
     node.addEventListener('dragenter', (ev) => {
